@@ -1,25 +1,72 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './store/AuthContext';
 import { AppLayout } from './components/layout/AppLayout';
+import { LoginPage } from './pages/Login/LoginPage';
 import { Dashboard } from './pages/Dashboard/Dashboard';
-import { MeetingsList } from './pages/MeetingsList/MeetingsList';
-import { MeetingReport } from './pages/MeetingReport/MeetingReport';
-import { Placeholder } from './pages/Placeholder/Placeholder';
+import { TranscriptIngestPage } from './pages/Ingest/TranscriptIngestPage';
+import { TranscriptReviewPage } from './pages/Review/TranscriptReviewPage';
+import { KanbanPage } from './pages/Kanban/KanbanPage';
+import { CalendarPage } from './pages/Calendar/CalendarPage';
+import { HistoryPage } from './pages/History/HistoryPage';
 
-function App() {
+function PrivateRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  if (isLoading) return null;
+  return user ? <>{children}</> : <Navigate to="/login" />;
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, isAdmin, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!user) return <Navigate to="/login" />;
+  return isAdmin ? <>{children}</> : <Navigate to="/" />;
+}
+
+function AppRoutes() {
+  const { user } = useAuth();
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<AppLayout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="meetings" element={<MeetingsList />} />
-          <Route path="meetings/:id" element={<MeetingReport />} />
-          <Route path="analytics" element={<Placeholder />} />
-          <Route path="settings" element={<Placeholder />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage />} />
+      <Route
+        path="/"
+        element={
+          <PrivateRoute>
+            <AppLayout />
+          </PrivateRoute>
+        }
+      >
+        <Route index element={<Dashboard />} />
+        <Route
+          path="ingest"
+          element={
+            <AdminRoute>
+              <TranscriptIngestPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="transcripts/:id/review"
+          element={
+            <AdminRoute>
+              <TranscriptReviewPage />
+            </AdminRoute>
+          }
+        />
+        <Route path="kanban" element={<KanbanPage />} />
+        <Route path="calendar" element={<CalendarPage />} />
+        <Route path="history" element={<HistoryPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+    </Routes>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}

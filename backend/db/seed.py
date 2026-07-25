@@ -1,261 +1,247 @@
+"""
+Briefr seed script — populates the database with test data.
+Uses bcrypt-hashed passwords and field names aligned with Pydantic models.
+
+Run:  cd backend && python db/seed.py
+"""
 from pymongo import MongoClient
-from dotenv import load_dotenv
-from datetime import datetime, timedelta
-import os
+from passlib.context import CryptContext
+from datetime import datetime, timedelta, timezone
 from bson import ObjectId
+import os
+from dotenv import load_dotenv
 
 load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI")
-DB_NAME = os.getenv("MONGO_DB_NAME", "Breifr")
+DB_NAME = os.getenv("MONGO_DB_NAME", "briefr")
+pwd_ctx = CryptContext(schemes=["bcrypt"])
+
 
 def seed_database():
-    """Populate Breifr database with dummy data for local dev"""
+    """Populate Briefr database with dummy data for local dev."""
     try:
         client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
         db = client[DB_NAME]
-        
-        print("🌱 Seeding Breifr database...\n")
-        
+
+        print("[SEED] Seeding Briefr database...\n")
+
         # Clear existing data
-        db["users"].delete_many({})
-        db["projects"].delete_many({})
-        db["meetings"].delete_many({})
-        db["transcripts"].delete_many({})
-        db["tasks"].delete_many({})
-        
+        for col_name in ["users", "projects", "meetings", "transcripts", "tasks"]:
+            db[col_name].delete_many({})
+
         # ==================== USERS ====================
+        admin_id = ObjectId()
+        member1_id = ObjectId()
+        member2_id = ObjectId()
+
         users_data = [
             {
-                "email": "rishi@breifr.com",
-                "name": "Rishi",
-                "role": "Admin",
-                "passwordHash": "hashed_pwd_1",
-                "createdAt": datetime.now()
+                "_id": admin_id,
+                "name": "Admin User",
+                "email": "admin@briefr.com",
+                "password": pwd_ctx.hash("admin123"),
+                "role": "admin",
+                "createdAt": datetime.now(timezone.utc),
             },
             {
-                "email": "omkaar@breifr.com",
+                "_id": member1_id,
                 "name": "Omkaar",
-                "role": "Member",
-                "passwordHash": "hashed_pwd_2",
-                "createdAt": datetime.now()
+                "email": "omkaar@briefr.com",
+                "password": pwd_ctx.hash("member123"),
+                "role": "member",
+                "createdAt": datetime.now(timezone.utc),
             },
             {
-                "email": "paavan@breifr.com",
+                "_id": member2_id,
                 "name": "Paavan",
-                "role": "Member",
-                "passwordHash": "hashed_pwd_3",
-                "createdAt": datetime.now()
-            }
+                "email": "paavan@briefr.com",
+                "password": pwd_ctx.hash("member123"),
+                "role": "member",
+                "createdAt": datetime.now(timezone.utc),
+            },
         ]
-        users = db["users"].insert_many(users_data)
-        user_ids = users.inserted_ids
-        print(f"✓ Created {len(user_ids)} users")
-        
+        db["users"].insert_many(users_data)
+        print(f"[OK] Created {len(users_data)} users")
+
         # ==================== PROJECTS ====================
-        projects_data = [
+        project_id = ObjectId()
+
+        db["projects"].insert_one(
             {
-                "name": "Breifr FYP",
+                "_id": project_id,
+                "name": "Briefr MVP",
                 "description": "AI-driven meeting intelligence and task automation system",
-                "members": [
-                    {"userId": user_ids[0], "name": "Rishi", "role": "Admin"},
-                    {"userId": user_ids[1], "name": "Omkaar", "role": "Member"},
-                    {"userId": user_ids[2], "name": "Paavan", "role": "Member"}
-                ],
-                "createdBy": user_ids[0],
-                "createdAt": datetime.now()
+                "adminId": str(admin_id),
+                "createdAt": datetime.now(timezone.utc),
             }
-        ]
-        projects = db["projects"].insert_many(projects_data)
-        project_id = projects.inserted_ids[0]
-        print(f"✓ Created {len(projects.inserted_ids)} project(s)")
-        
+        )
+        print("[OK] Created 1 project")
+
         # ==================== MEETINGS ====================
+        meeting1_id = ObjectId()
+        meeting2_id = ObjectId()
+
         meetings_data = [
             {
-                "projectId": project_id,
+                "_id": meeting1_id,
                 "title": "Project Kickoff & Scope",
-                "description": "Discussed project goals, tech stack, timeline",
-                "hostId": user_ids[0],
-                "members": [user_ids[0], user_ids[1], user_ids[2]],
-                "meetingDate": datetime.now() - timedelta(days=2),
-                "createdAt": datetime.now() - timedelta(days=2)
+                "projectId": str(project_id),
+                "hostId": str(admin_id),
+                "memberIds": [str(member1_id), str(member2_id)],
+                "scheduledAt": datetime.now(timezone.utc) - timedelta(days=2),
+                "createdAt": datetime.now(timezone.utc) - timedelta(days=2),
             },
             {
-                "projectId": project_id,
+                "_id": meeting2_id,
                 "title": "Database Schema Review",
-                "description": "Finalized MongoDB collections and relationships",
-                "hostId": user_ids[0],
-                "members": [user_ids[0], user_ids[1], user_ids[2]],
-                "meetingDate": datetime.now() - timedelta(days=1),
-                "createdAt": datetime.now() - timedelta(days=1)
-            }
+                "projectId": str(project_id),
+                "hostId": str(admin_id),
+                "memberIds": [str(member1_id), str(member2_id)],
+                "scheduledAt": datetime.now(timezone.utc) - timedelta(days=1),
+                "createdAt": datetime.now(timezone.utc) - timedelta(days=1),
+            },
         ]
-        meetings = db["meetings"].insert_many(meetings_data)
-        meeting_ids = meetings.inserted_ids
-        print(f"✓ Created {len(meeting_ids)} meetings")
-        
+        db["meetings"].insert_many(meetings_data)
+        print(f"[OK] Created {len(meetings_data)} meetings")
+
         # ==================== TRANSCRIPTS ====================
-        transcript_data = [
+        transcript1_id = ObjectId()
+        transcript2_id = ObjectId()
+
+        transcripts_data = [
             {
-                "meetingId": meeting_ids[0],
-                "rawText": """
-Rishi: Good morning team. Let's discuss the project scope and timeline.
-
-Omkaar: I'll handle the backend architecture and API design. Should take about 2 days.
-
-Paavan: I'll start frontend with React and Tailwind. Need the API contracts by tomorrow.
-
-Rishi: Perfect. Let's also finalize the MongoDB schema today. Admin review screen is critical.
-
-Omkaar: Agreed. I'll document the schema and share by EOD.
-
-Rishi: Great. Let's reconvene tomorrow to review. Meeting adjourned.
-                """.strip(),
-                "extractedTasks": [
-                    {
-                        "title": "Design backend API architecture",
-                        "description": "FastAPI routes for auth, transcripts, tasks, extraction",
-                        "owner": "Omkaar",
-                        "dueDate": datetime.now() + timedelta(days=2),
-                        "priority": "High"
-                    },
-                    {
-                        "title": "Build frontend with React",
-                        "description": "Login, transcript upload, Kanban board, calendar",
-                        "owner": "Paavan",
-                        "dueDate": datetime.now() + timedelta(days=7),
-                        "priority": "High"
-                    },
-                    {
-                        "title": "Finalize MongoDB schema",
-                        "description": "Collections, indices, relationships documented",
-                        "owner": "Rishi",
-                        "dueDate": datetime.now() + timedelta(hours=8),
-                        "priority": "High"
-                    }
-                ],
-                "extractedAt": datetime.now(),
-                "createdAt": datetime.now() - timedelta(days=2)
+                "_id": transcript1_id,
+                "meetingId": str(meeting1_id),
+                "rawText": (
+                    "Admin: Good morning team. Let's discuss the project scope and timeline.\n\n"
+                    "Omkaar: I'll handle the backend architecture and API design. Should take about 2 days.\n\n"
+                    "Paavan: I'll start frontend with React and Tailwind. Need the API contracts by tomorrow.\n\n"
+                    "Admin: Perfect. Let's also finalize the MongoDB schema today. Admin review screen is critical.\n\n"
+                    "Omkaar: Agreed. I'll document the schema and share by EOD.\n\n"
+                    "Admin: Great. Let's reconvene tomorrow to review. Meeting adjourned."
+                ),
+                "extractedTasks": [],
+                "createdAt": datetime.now(timezone.utc) - timedelta(days=2),
             },
             {
-                "meetingId": meeting_ids[1],
-                "rawText": """
-Rishi: Let's review the MongoDB schema I documented.
-
-Omkaar: Looks good. I see the indices on projectId and assignedTo.userId. Should we also index dueDate?
-
-Rishi: Good catch. Yes, let's add that for calendar queries.
-
-Paavan: The embedded tasks in Transcript make sense. Keeps everything flexible.
-
-Rishi: Perfect. I'll update the schema. Let's finalize by EOD and commit to repo.
-                """.strip(),
-                "extractedTasks": [
-                    {
-                        "title": "Add dueDate index to tasks collection",
-                        "description": "Optimize calendar view queries",
-                        "owner": "Rishi",
-                        "dueDate": datetime.now() + timedelta(hours=4),
-                        "priority": "Medium"
-                    },
-                    {
-                        "title": "Commit schema to GitHub",
-                        "description": "Push updated schema.md to main branch",
-                        "owner": "Rishi",
-                        "dueDate": datetime.now() + timedelta(hours=6),
-                        "priority": "High"
-                    }
-                ],
-                "extractedAt": datetime.now(),
-                "createdAt": datetime.now() - timedelta(days=1)
-            }
+                "_id": transcript2_id,
+                "meetingId": str(meeting2_id),
+                "rawText": (
+                    "Admin: Let's review the MongoDB schema I documented.\n\n"
+                    "Omkaar: Looks good. I see the indices on projectId and assignedTo.userId. "
+                    "Should we also index dueDate?\n\n"
+                    "Admin: Good catch. Yes, let's add that for calendar queries.\n\n"
+                    "Paavan: The embedded tasks in Transcript make sense. Keeps everything flexible.\n\n"
+                    "Admin: Perfect. I'll update the schema. Let's finalize by EOD and commit to repo."
+                ),
+                "extractedTasks": [],
+                "createdAt": datetime.now(timezone.utc) - timedelta(days=1),
+            },
         ]
-        transcripts = db["transcripts"].insert_many(transcript_data)
-        transcript_ids = transcripts.inserted_ids
-        print(f"✓ Created {len(transcript_ids)} transcripts")
-        
+        db["transcripts"].insert_many(transcripts_data)
+        print(f"[OK] Created {len(transcripts_data)} transcripts")
+
         # ==================== TASKS ====================
         tasks_data = [
-            # From meeting 1
             {
-                "transcriptId": transcript_ids[0],
-                "projectId": project_id,
                 "title": "Design backend API architecture",
                 "description": "FastAPI routes for auth, transcripts, tasks, extraction",
-                "status": "In Progress",
-                "assignedTo": {"userId": user_ids[1], "name": "Omkaar"},
-                "dueDate": datetime.now() + timedelta(days=2),
-                "priority": "High",
-                "createdAt": datetime.now(),
-                "updatedAt": datetime.now()
+                "transcriptId": str(transcript1_id),
+                "projectId": str(project_id),
+                "assignedTo": {
+                    "userId": str(member1_id),
+                    "name": "Omkaar",
+                    "email": "omkaar@briefr.com",
+                },
+                "deadline": datetime.now(timezone.utc) + timedelta(days=2),
+                "priority": "high",
+                "status": "in_progress",
+                "createdAt": datetime.now(timezone.utc),
             },
             {
-                "transcriptId": transcript_ids[0],
-                "projectId": project_id,
                 "title": "Build frontend with React",
                 "description": "Login, transcript upload, Kanban board, calendar",
-                "status": "To Do",
-                "assignedTo": {"userId": user_ids[2], "name": "Paavan"},
-                "dueDate": datetime.now() + timedelta(days=7),
-                "priority": "High",
-                "createdAt": datetime.now(),
-                "updatedAt": datetime.now()
+                "transcriptId": str(transcript1_id),
+                "projectId": str(project_id),
+                "assignedTo": {
+                    "userId": str(member2_id),
+                    "name": "Paavan",
+                    "email": "paavan@briefr.com",
+                },
+                "deadline": datetime.now(timezone.utc) + timedelta(days=7),
+                "priority": "high",
+                "status": "todo",
+                "createdAt": datetime.now(timezone.utc),
             },
             {
-                "transcriptId": transcript_ids[0],
-                "projectId": project_id,
                 "title": "Finalize MongoDB schema",
                 "description": "Collections, indices, relationships documented",
-                "status": "In Progress",
-                "assignedTo": {"userId": user_ids[0], "name": "Rishi"},
-                "dueDate": datetime.now() + timedelta(hours=8),
-                "priority": "High",
-                "createdAt": datetime.now(),
-                "updatedAt": datetime.now()
+                "transcriptId": str(transcript1_id),
+                "projectId": str(project_id),
+                "assignedTo": {
+                    "userId": str(admin_id),
+                    "name": "Admin User",
+                    "email": "admin@briefr.com",
+                },
+                "deadline": datetime.now(timezone.utc) + timedelta(hours=8),
+                "priority": "high",
+                "status": "done",
+                "createdAt": datetime.now(timezone.utc),
             },
-            # From meeting 2
             {
-                "transcriptId": transcript_ids[1],
-                "projectId": project_id,
                 "title": "Add dueDate index to tasks collection",
                 "description": "Optimize calendar view queries",
-                "status": "To Do",
-                "assignedTo": {"userId": user_ids[0], "name": "Rishi"},
-                "dueDate": datetime.now() + timedelta(hours=4),
-                "priority": "Medium",
-                "createdAt": datetime.now(),
-                "updatedAt": datetime.now()
+                "transcriptId": str(transcript2_id),
+                "projectId": str(project_id),
+                "assignedTo": {
+                    "userId": str(admin_id),
+                    "name": "Admin User",
+                    "email": "admin@briefr.com",
+                },
+                "deadline": datetime.now(timezone.utc) + timedelta(hours=4),
+                "priority": "medium",
+                "status": "todo",
+                "createdAt": datetime.now(timezone.utc),
             },
             {
-                "transcriptId": transcript_ids[1],
-                "projectId": project_id,
                 "title": "Commit schema to GitHub",
                 "description": "Push updated schema.md to main branch",
-                "status": "To Do",
-                "assignedTo": {"userId": user_ids[0], "name": "Rishi"},
-                "dueDate": datetime.now() + timedelta(hours=6),
-                "priority": "High",
-                "createdAt": datetime.now(),
-                "updatedAt": datetime.now()
-            }
+                "transcriptId": str(transcript2_id),
+                "projectId": str(project_id),
+                "assignedTo": {
+                    "userId": str(member1_id),
+                    "name": "Omkaar",
+                    "email": "omkaar@briefr.com",
+                },
+                "deadline": datetime.now(timezone.utc) + timedelta(hours=6),
+                "priority": "high",
+                "status": "todo",
+                "createdAt": datetime.now(timezone.utc),
+            },
         ]
-        tasks = db["tasks"].insert_many(tasks_data)
-        print(f"✓ Created {len(tasks.inserted_ids)} tasks")
-        
-        print("\n✅ Breifr database seeding complete!\n")
-        print(f"📊 Summary:")
-        print(f"  - Users: {len(user_ids)}")
-        print(f"  - Projects: {len(projects.inserted_ids)}")
-        print(f"  - Meetings: {len(meeting_ids)}")
-        print(f"  - Transcripts: {len(transcript_ids)}")
-        print(f"  - Tasks: {len(tasks.inserted_ids)}")
-        
+        db["tasks"].insert_many(tasks_data)
+        print(f"[OK] Created {len(tasks_data)} tasks")
+
+        print("\n[DONE] Briefr database seeding complete!\n")
+        print("Summary:")
+        print(f"  - Users: {len(users_data)}")
+        print(f"  - Projects: 1")
+        print(f"  - Meetings: {len(meetings_data)}")
+        print(f"  - Transcripts: {len(transcripts_data)}")
+        print(f"  - Tasks: {len(tasks_data)}")
+        print()
+        print("Login credentials:")
+        print("  Admin:  admin@briefr.com / admin123")
+        print("  Member: omkaar@briefr.com / member123")
+        print("  Member: paavan@briefr.com / member123")
+
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"[ERROR] {e}")
         raise
     finally:
         client.close()
+
 
 if __name__ == "__main__":
     seed_database()

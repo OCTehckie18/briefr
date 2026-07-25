@@ -4,9 +4,10 @@
   justify-content: center;
   gap: 8px;
   font-family: var(--font-sans);
-  font-weight: 500;
-  font-size: 0.95rem;
-  border-radius: var(--border-radius-md);
+  min-height: 40px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
   cursor: pointer;
   white-space: nowrap;
@@ -21,13 +22,13 @@
 
 /* Variants */
 .btn-primary {
-  background-color: var(--primary);
-  color: #ffffff;
-  box-shadow: 0 4px 14px var(--primary-glow);
+  background: linear-gradient(90deg, #6366f1, #22d3ee);
+  color: #fff;
+  box-shadow: 0 6px 18px var(--primary-glow);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: var(--primary-hover);
+  filter: brightness(1.08);
   transform: translateY(-1px);
   box-shadow: 0 6px 20px var(--primary-glow);
 }
@@ -37,25 +38,25 @@
 }
 
 .btn-secondary {
-  background-color: var(--bg-tertiary);
+  background-color: var(--surface-raised);
   color: var(--text-primary);
-  border-color: var(--card-border);
+  border-color: var(--border);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background-color: var(--card-border);
+  background-color: rgba(255,255,255,.1);
   color: var(--text-primary);
 }
 
 .btn-outline {
   background-color: transparent;
   color: var(--text-primary);
-  border-color: var(--card-border);
+  border-color: var(--border);
 }
 
 .btn-outline:hover:not(:disabled) {
-  background-color: var(--bg-tertiary);
-  border-color: var(--text-muted);
+  background-color: var(--surface-raised);
+  border-color: var(--border-strong);
 }
 
 .btn-ghost {
@@ -64,7 +65,7 @@
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background-color: var(--bg-tertiary);
+  background-color: var(--surface-raised);
   color: var(--text-primary);
 }
 
@@ -72,17 +73,18 @@
 .btn-sm {
   padding: 6px 12px;
   font-size: 0.85rem;
-  border-radius: var(--border-radius-sm);
+  min-height: 32px;
+  border-radius: var(--radius-sm);
 }
 
 .btn-md {
-  padding: 10px 20px;
+  padding: 9px 16px;
 }
 
 .btn-lg {
-  padding: 14px 28px;
-  font-size: 1.05rem;
-  border-radius: var(--border-radius-lg);
+  min-height: 48px;
+  padding: 12px 20px;
+  border-radius: var(--radius-lg);
 }
 
 .btn-icon-only {
