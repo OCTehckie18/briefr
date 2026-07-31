@@ -8,6 +8,7 @@ import { TranscriptReviewPage } from './pages/Review/TranscriptReviewPage';
 import { KanbanPage } from './pages/Kanban/KanbanPage';
 import { CalendarPage } from './pages/Calendar/CalendarPage';
 import { HistoryPage } from './pages/History/HistoryPage';
+import { ScheduleMeetingPage } from './pages/ScheduleMeeting/ScheduleMeetingPage';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -49,6 +50,14 @@ function AppRoutes() {
           element={
             <AdminRoute>
               <TranscriptReviewPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="meetings/schedule"
+          element={
+            <AdminRoute>
+              <ScheduleMeetingPage />
             </AdminRoute>
           }
         />

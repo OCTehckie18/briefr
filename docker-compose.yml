@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  # ── Whisper STT Service ──────────────────────────────────────────────────
+  whisper:
+    build:
+      context: ./whisper-service
+      dockerfile: Dockerfile
+    container_name: briefr-whisper
+    ports:
+      - "9000:9000"
+    environment:
+      # Options: tiny (~75MB), base (~145MB), small (~465MB), medium (~1.5GB)
+      WHISPER_MODEL: base
+      WHISPER_DEVICE: cpu
+      WHISPER_COMPUTE_TYPE: int8
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s  # Give the model time to download/load on first start

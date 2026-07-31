@@ -1,8 +1,29 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 
-app = FastAPI(title="Briefr API", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start APScheduler on startup, shut it down on app close."""
+    try:
+        from app.services.scheduler import start_scheduler, stop_scheduler
+        start_scheduler()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Scheduler failed to start: {e}")
+
+    yield
+
+    try:
+        from app.services.scheduler import stop_scheduler
+        stop_scheduler()
+    except Exception:
+        pass
+
+
+app = FastAPI(title="Briefr API", version="1.0.0", lifespan=lifespan)
 
 # CORS — allow frontend origin
 app.add_middleware(
@@ -57,6 +78,12 @@ def _register_routes():
     try:
         from app.routes import tasks
         app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
+    except Exception:
+        pass
+
+    try:
+        from app.routes import bot
+        app.include_router(bot.router, prefix="/api/bot", tags=["bot"])
     except Exception:
         pass
 

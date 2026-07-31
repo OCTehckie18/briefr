@@ -13,4 +13,5 @@ class TranscriptOut(BaseModel):
     meetingId: str
     rawText: str
     extractedTasks: list = []
+    structuredExtraction: Optional[dict] = None
     createdAt: datetime

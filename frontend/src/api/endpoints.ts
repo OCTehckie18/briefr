@@ -21,6 +21,10 @@ export const createTranscript = (data: { meetingId: string; rawText: string }) =
   api.post('/api/transcripts', data);
 export const extractTasks = (transcriptId: string) =>
   api.post(`/api/transcripts/${transcriptId}/extract`);
+export const processTranscript = (transcriptId: string, meetingDate: string) =>
+  api.post(`/api/transcripts/${transcriptId}/process`, null, {
+    params: { meeting_date: meetingDate },
+  });
 
 // ── Tasks ──
 export interface TaskPayload {

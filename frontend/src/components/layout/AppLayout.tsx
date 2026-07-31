@@ -9,6 +9,7 @@ import {
   Search,
   Bell,
   LogOut,
+  Video,
 } from 'lucide-react';
 import { useAuth } from '../../store/AuthContext';
 
@@ -19,6 +20,7 @@ export const AppLayout: React.FC = () => {
   const navItems = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
     ...(isAdmin ? [{ to: '/ingest', label: 'Ingest', icon: FileText, end: false }] : []),
+    ...(isAdmin ? [{ to: '/meetings/schedule', label: 'Schedule Meeting', icon: Video, end: false }] : []),
     { to: '/kanban', label: 'Kanban', icon: Columns3, end: false },
     { to: '/calendar', label: 'Calendar', icon: CalendarDays, end: false },
     { to: '/history', label: 'History', icon: History, end: false },

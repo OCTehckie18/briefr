@@ -1,0 +1,13 @@
+*.md
+!README.md
+!SKILL.md
+
+*.pyc
+
+__pycache__
+.agents
+.vscode/
+bot/node_modules/
+bot/.env
+bot/auth.json
+"Worksheet - Team #5 - SPD IV (1).xlsx"
