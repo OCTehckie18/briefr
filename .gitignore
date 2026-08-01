@@ -6,7 +6,7 @@
 
 __pycache__
 .agents
-.vscode/
+.vscode
 bot/node_modules/
 bot/.env
 bot/auth.json
