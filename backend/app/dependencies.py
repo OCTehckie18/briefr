@@ -4,6 +4,7 @@ from jose import JWTError
 from app.services.auth import decode_access_token
 from app.db import users_col
 from bson import ObjectId
+from bson.errors import InvalidId
 
 bearer_scheme = HTTPBearer()
 
@@ -21,7 +22,12 @@ async def get_current_user(
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-    user = await users_col.find_one({"_id": ObjectId(user_id)})
+    try:
+        object_id = ObjectId(user_id)
+    except (InvalidId, TypeError):
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+
+    user = await users_col.find_one({"_id": object_id})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return user
