@@ -94,9 +94,15 @@ export interface AcademicSession {
 }
 
 export const getAcademicCohorts = () => api.get<AcademicCohort[]>('/api/academic/cohorts');
+export const createAcademicCohort = (data: { name: string; grade: string; section: string; academicYear: string; description?: string }) =>
+  api.post<AcademicCohort>('/api/academic/cohorts', data);
 export const getAcademicStudents = (cohortId?: string) =>
   api.get<AcademicStudent[]>('/api/academic/students', { params: cohortId ? { cohortId } : undefined });
+export const createAcademicStudent = (data: { studentId: string; name: string; email?: string; cohortId: string }) =>
+  api.post<AcademicStudent>('/api/academic/students', data);
 export const getAcademicRubrics = () => api.get<AcademicRubric[]>('/api/academic/rubrics');
+export const createAcademicRubric = (data: { name: string; description?: string; dimensions: AcademicRubricDimension[] }) =>
+  api.post<AcademicRubric>('/api/academic/rubrics', data);
 export const createAcademicSession = (data: {
   title: string;
   topic: string;
