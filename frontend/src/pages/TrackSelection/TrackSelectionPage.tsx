@@ -4,9 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../store/AuthContext';
 import type { ProductTrack } from '../../store/AuthContext';
 
-const tracks: Array<{ id: ProductTrack; title: string; description: string; details: string; icon: typeof GraduationCap }> = [
-  { id: 'academic_gd', title: 'Academic GD', description: 'Assess group discussions with clear, evidence-based student reports.', details: 'Participants, rubrics, transcript evidence, and teacher review', icon: GraduationCap },
-  { id: 'industry', title: 'Industry Meetings', description: 'Turn team meetings into manager-approved decisions and assigned work.', details: 'Action items, owners, worksheets, and change requests', icon: UsersRound },
+const tracks: Array<{ id: ProductTrack; title: string; description: string; details: string; capabilities: string[]; icon: typeof GraduationCap }> = [
+  { id: 'academic_gd', title: 'Academic GD', description: 'Assess group discussions with clear, evidence-based student reports.', details: 'Participants, rubrics, transcript evidence, and teacher review', capabilities: ['Rubrics', 'Evidence', 'Teacher review'], icon: GraduationCap },
+  { id: 'industry', title: 'Industry Meetings', description: 'Turn team meetings into manager-approved decisions and assigned work.', details: 'Action items, owners, worksheets, and change requests', capabilities: ['Meetings', 'Tasks', 'Deadlines'], icon: UsersRound },
 ];
 
 export const TrackSelectionPage: React.FC = () => {
@@ -32,10 +32,10 @@ export const TrackSelectionPage: React.FC = () => {
           <p className="track-selection__intro">Select the experience that matches your work. You can switch workspaces later.</p>
         </div>
         <div className="track-options">
-          {tracks.map(({ id, title, description, details, icon: Icon }) => (
-            <button key={id} className={`track-option ${id === 'academic_gd' ? 'track-option--academic' : 'track-option--industry'}`} onClick={() => choose(id)}>
+          {tracks.map(({ id, title, description, details, capabilities, icon: Icon }) => (
+            <button type="button" key={id} aria-describedby={`${id}-details`} className={`track-option ${id === 'academic_gd' ? 'track-option--academic' : 'track-option--industry'}`} onClick={() => choose(id)}>
               <span className="track-option__topline"><span className="track-option__icon"><Icon size={25} strokeWidth={1.8} /></span><span className="track-option__arrow"><ArrowRight size={19} /></span></span>
-              <span className="track-option__copy"><span className="track-option__title">{title}</span><span className="track-option__description">{description}</span><span className="track-option__details">{details}</span></span>
+              <span className="track-option__copy"><span className="track-option__title">{title}</span><span className="track-option__description">{description}</span><span id={`${id}-details`} className="track-option__details">{details}</span><span className="track-option__capabilities" aria-label={`${title} capabilities`}>{capabilities.map((capability) => <span key={capability} className="track-option__chip">{capability}</span>)}</span></span>
               <span className="track-option__cta">Continue <ArrowRight size={15} /></span>
             </button>
           ))}
