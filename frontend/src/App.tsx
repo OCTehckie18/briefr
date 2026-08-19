@@ -14,6 +14,7 @@ import { AcademicSessionSetupPage } from './pages/AcademicSessionSetup/AcademicS
 import { AcademicParticipantMappingPage } from './pages/AcademicParticipantMapping/AcademicParticipantMappingPage';
 import { AcademicAssessmentPage } from './pages/AcademicAssessment/AcademicAssessmentPage';
 import { AcademicReportsPage } from './pages/AcademicReports/AcademicReportsPage';
+import { MeetingReport } from './pages/MeetingReport/MeetingReport';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -92,6 +93,7 @@ function AppRoutes() {
         <Route path="kanban" element={<KanbanPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="history" element={<HistoryPage />} />
+        <Route path="meetings/:id" element={<MeetingReport />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
