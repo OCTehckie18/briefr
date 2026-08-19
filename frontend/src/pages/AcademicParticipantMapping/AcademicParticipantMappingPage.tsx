@@ -29,6 +29,7 @@ export const AcademicParticipantMappingPage: React.FC = () => {
       await updateAcademicTranscriptMapping(id, { mappings, finalize });
       setSaved(true);
       setContext((current) => current ? { ...current, mappings, finalized: finalize } : current);
+      if (finalize) navigate(`/academic/transcripts/${id}/assessment`);
     } catch (requestError: any) {
       setError(requestError.response?.data?.detail || 'Unable to save participant mapping.');
     } finally { setSaving(false); }
