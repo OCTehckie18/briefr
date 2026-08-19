@@ -16,7 +16,11 @@ class Settings(BaseSettings):
 
     # LLM — Groq
     LLM_API_KEY: str = ""
-    LLM_MODEL: str = "llama-3.3-70b-versatile"
+    # Groq deprecated llama-3.3-70b-versatile in August 2026.
+    LLM_MODEL: str = "openai/gpt-oss-120b"
+    LLM_FALLBACK_MODEL: str = "openai/gpt-oss-120b"
+    ACADEMIC_LLM_MODEL: str = "qwen/qwen3.6-27b"
+    ACADEMIC_LLM_MAX_TOKENS: int = 3000
 
     # Email / SMTP
     SMTP_HOST: str = "smtp.gmail.com"
