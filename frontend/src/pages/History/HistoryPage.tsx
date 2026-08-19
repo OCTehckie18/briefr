@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getMeetings, getTranscripts, getTasks } from '../../api/endpoints';
 import type { Meeting, Transcript, Task } from '../../api/endpoints';
 import { ChevronDown, ChevronRight, FileText, CheckSquare, Loader2, CalendarDays, Inbox } from 'lucide-react';
@@ -6,6 +7,7 @@ import { useAuth } from '../../store/AuthContext';
 
 export const HistoryPage: React.FC = () => {
   const { track } = useAuth();
+  const navigate = useNavigate();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -57,6 +59,7 @@ export const HistoryPage: React.FC = () => {
                   {meeting.botStatus && <span className={`hidden rounded-md border px-2 py-1 text-[10px] font-semibold sm:inline-flex ${meeting.botStatus === 'failed' ? 'border-red-500/20 bg-red-500/10 text-red-400' : meeting.botStatus === 'done' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-amber-500/20 bg-amber-500/10 text-amber-400'}`}>{meeting.botStatus}</span>}
                   <span className={`hidden items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold sm:flex ${transcript ? 'border-indigo-500/20 bg-indigo-500/10 text-indigo-400' : 'border-white/[0.06] bg-white/[0.03] text-slate-500'}`}><FileText size={12} /> {transcript ? 'Transcript' : 'No transcript'}</span>
                   <span className="flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-400"><CheckSquare size={12} /> {meetingTasks.length} tasks</span>
+                  <span role="link" tabIndex={0} onClick={(event) => { event.stopPropagation(); navigate(`/meetings/${meeting.id}`); }} onKeyDown={(event) => { if (event.key === 'Enter') navigate(`/meetings/${meeting.id}`); }} className="hidden cursor-pointer rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[10px] font-semibold text-cyan-400 sm:inline-flex">Open</span>
                 </div>
               </button>
 
