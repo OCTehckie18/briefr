@@ -96,7 +96,7 @@ export const getTask = (id: string) => api.get<Task>(`/api/tasks/${id}`);
 export const createTask = (data: TaskPayload) => api.post('/api/tasks', data);
 export const updateTask = (id: string, data: Partial<TaskPayload>) =>
   api.patch(`/api/tasks/${id}`, data);
-export const updateTaskStatus = (id: string, status: string) =>
+export const updateTaskStatus = (id: string, status: Task['status']) =>
   api.patch(`/api/tasks/${id}/status`, { status });
 export const deleteTask = (id: string) => api.delete(`/api/tasks/${id}`);
 
