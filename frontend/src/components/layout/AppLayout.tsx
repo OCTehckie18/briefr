@@ -44,15 +44,15 @@ export const AppLayout: React.FC = () => {
     name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
 
   return (
-    <div className={`flex h-screen w-screen overflow-hidden ${isAcademic ? 'academic-app-shell' : 'bg-[#080b12] text-slate-100'}`}>
-      <aside className={`hidden w-72 flex-col md:flex ${isAcademic ? 'academic-sidebar' : 'border-r border-slate-800 bg-[#0d111a]'}`}>
-        <div className="flex h-20 items-center gap-3 border-b border-white/10 px-6">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-500 text-sm font-bold text-slate-950">
+    <div className={`flex h-screen w-screen overflow-hidden ${isAcademic ? 'academic-app-shell' : 'bg-black text-white'}`}>
+      <aside className={`hidden w-72 flex-col md:flex ${isAcademic ? 'academic-sidebar' : 'border-r border-[#202020] bg-black'}`}>
+        <div className="flex h-20 items-center gap-3 border-b border-[#202020] px-6">
+          <div className="flex h-10 w-10 items-center justify-center border border-[#ffc000] bg-[#ffc000] text-sm font-bold text-black">
             B
           </div>
           <div>
-          <div className={`text-lg font-semibold tracking-tight ${isAcademic ? 'text-slate-800' : 'text-white'}`}>Briefr</div>
-            <div className="text-xs text-slate-500">{isAcademic ? 'Academic GD' : 'Industry Meetings'}</div>
+          <div className={`text-lg font-normal uppercase tracking-[0.12em] ${isAcademic ? 'text-slate-800' : 'text-white'}`}>Briefr</div>
+            <div className="text-[10px] uppercase tracking-[0.18em] text-[#7d7d7d]">{isAcademic ? 'Academic GD' : 'Industry Meetings'}</div>
           </div>
         </div>
 
@@ -67,14 +67,14 @@ export const AppLayout: React.FC = () => {
                 className={({ isActive }) =>
                   `flex items-center gap-3 rounded-[14px] px-3 py-2.5 text-sm font-medium transition-all ${
                     isActive
-                      ? isAcademic ? 'academic-nav-link--active' : 'bg-white/10 text-white shadow-sm'
-                      : isAcademic ? 'academic-nav-link' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                      ? isAcademic ? 'academic-nav-link--active' : 'border-l-2 border-[#ffc000] bg-[#202020] text-white'
+                      : isAcademic ? 'academic-nav-link' : 'text-[#7d7d7d] hover:bg-[#181818] hover:text-white'
                   }`
                 }
               >
                 {({ isActive }) => (
                   <>
-                    <span className={`flex h-8 w-8 items-center justify-center rounded-[10px] ${isAcademic ? (isActive ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400') : (isActive ? 'bg-cyan-500/15 text-cyan-400' : 'bg-white/5 text-slate-500')}`}>
+                    <span className={`flex h-8 w-8 items-center justify-center ${isAcademic ? (isActive ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400') : (isActive ? 'bg-[#ffc000] text-black' : 'bg-[#202020] text-[#7d7d7d]')}`}>
                       <Icon size={16} />
                     </span>
                     <span>{item.label}</span>
@@ -97,8 +97,8 @@ export const AppLayout: React.FC = () => {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className={`flex h-20 items-center justify-between px-5 sm:px-8 lg:px-12 ${isAcademic ? 'academic-header' : 'border-b border-slate-800 bg-[#0d111a]'}`}>
-          <div className={`flex w-full max-w-xl items-center gap-3 rounded-[14px] border px-4 py-2.5 ${isAcademic ? 'border-slate-200 bg-slate-50' : 'border-white/10 bg-white/5'}`}>
+        <header className={`flex h-20 items-center justify-between px-5 sm:px-8 lg:px-12 ${isAcademic ? 'academic-header' : 'border-b border-[#202020] bg-black'}`}>
+          <div className={`flex w-full max-w-xl items-center gap-3 border px-4 py-2.5 ${isAcademic ? 'border-slate-200 bg-slate-50' : 'border-[#494949] bg-[#181818]'}`}>
             <Search size={16} className={isAcademic ? 'text-indigo-400' : 'text-slate-500'} />
             <input
               type="text"
@@ -108,18 +108,18 @@ export const AppLayout: React.FC = () => {
           </div>
 
           <div className="ml-4 flex items-center gap-3">
-            <button aria-label="Notifications" className={`flex h-10 w-10 items-center justify-center rounded-[14px] border transition ${isAcademic ? 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50' : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-200'}`}>
+            <button aria-label="Notifications" className={`flex h-10 w-10 items-center justify-center border transition ${isAcademic ? 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50' : 'border-[#494949] bg-[#181818] text-[#7d7d7d] hover:bg-[#202020] hover:text-white'}`}>
               <Bell size={16} />
             </button>
 
-            <div className={`hidden items-center gap-3 rounded-[14px] border px-3 py-2 sm:flex ${isAcademic ? 'border-slate-200 bg-white' : 'border-white/10 bg-white/5'}`}>
+            <div className={`hidden items-center gap-3 border px-3 py-2 sm:flex ${isAcademic ? 'border-slate-200 bg-white' : 'border-[#202020] bg-[#181818]'}`}>
               <div className="text-right">
                 <div className={`text-sm font-medium ${isAcademic ? 'text-slate-700' : 'text-slate-200'}`}>{user?.name || 'User'}</div>
                 <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">
                   {user?.role === 'admin' ? 'Admin' : 'Member'}
                 </div>
               </div>
-              <div className={`flex h-9 w-9 items-center justify-center rounded-xl text-xs font-semibold ${isAcademic ? 'bg-indigo-100 text-indigo-700' : 'bg-gradient-to-br from-slate-700 to-slate-800 text-slate-200'}`}>
+              <div className={`flex h-9 w-9 items-center justify-center text-xs font-semibold ${isAcademic ? 'bg-indigo-100 text-indigo-700' : 'bg-[#ffc000] text-black'}`}>
                 {user ? getInitials(user.name) : '??'}
               </div>
             </div>
