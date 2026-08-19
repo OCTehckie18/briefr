@@ -36,15 +36,27 @@ Output schema:
 Transcript:
 {transcript}"""
     client = AsyncGroq(api_key=settings.LLM_API_KEY)
-    response = await client.chat.completions.create(
-        model=settings.LLM_MODEL,
-        messages=[
-            {"role": "system", "content": "You are a careful academic group-discussion evaluator."},
-            {"role": "user", "content": prompt},
-        ],
-        temperature=0.1,
-        max_tokens=8000,
-    )
+    messages = [
+        {"role": "system", "content": "You are a careful academic group-discussion evaluator."},
+        {"role": "user", "content": prompt},
+    ]
+    model = settings.LLM_MODEL
+    try:
+        response = await client.chat.completions.create(
+            model=model, messages=messages, temperature=0.1, max_tokens=8000
+        )
+    except Exception as exc:
+        # Keep deployments resilient when an older .env still references a
+        # recently deprecated Groq model.
+        if model == "llama-3.3-70b-versatile" and settings.LLM_FALLBACK_MODEL != model:
+            response = await client.chat.completions.create(
+                model=settings.LLM_FALLBACK_MODEL,
+                messages=messages,
+                temperature=0.1,
+                max_tokens=8000,
+            )
+        else:
+            raise exc
     raw = re.sub(r"```json|```", "", response.choices[0].message.content or "").strip()
     result = json.loads(raw)
     if not isinstance(result.get("assessments"), list):
