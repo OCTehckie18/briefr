@@ -135,6 +135,7 @@ button:disabled { cursor: not-allowed; }
 .track-option--academic .track-option__icon { background: #16434d; color: #a5f3fc; }
 .track-option__topline .track-option__arrow { color: #64748b; }
 .track-option__copy { display: grid; gap: 5px; margin-top: auto; }
+.track-option__audience { color: #64748b; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
 .track-option__title { color: var(--text-primary); font-size: 17px; font-weight: 650; }
 .track-option__description { color: #cbd5e1; font-size: 14px; line-height: 1.45; }
 .track-option__details { color: var(--text-muted); font-size: 12px; }
