@@ -49,8 +49,18 @@ export interface User {
 export const getUsers = () => api.get<User[]>('/api/users');
 
 // ── Transcripts ──
-export const getTranscripts = () => api.get('/api/transcripts');
-export const getTranscript = (id: string) => api.get(`/api/transcripts/${id}`);
+export interface Transcript {
+  id: string;
+  meetingId: string;
+  rawText: string;
+  segments: Array<Record<string, unknown>>;
+  extractedTasks: unknown[];
+  structuredExtraction?: Record<string, any> | null;
+  createdAt: string;
+}
+
+export const getTranscripts = () => api.get<Transcript[]>('/api/transcripts');
+export const getTranscript = (id: string) => api.get<Transcript>(`/api/transcripts/${id}`);
 export const createTranscript = (data: { meetingId: string; rawText: string }) =>
   api.post('/api/transcripts', data);
 export const extractTasks = (transcriptId: string) =>
@@ -72,8 +82,17 @@ export interface TaskPayload {
   status?: 'todo' | 'in_progress' | 'done';
 }
 
-export const getTasks = () => api.get('/api/tasks');
-export const getTask = (id: string) => api.get(`/api/tasks/${id}`);
+export interface Task extends Omit<TaskPayload, 'status' | 'priority' | 'assignedTo'> {
+  id: string;
+  assignedTo?: { userId: string; name: string; email: string };
+  deadline?: string;
+  priority: 'high' | 'medium' | 'low';
+  status: 'todo' | 'in_progress' | 'done';
+  createdAt: string;
+}
+
+export const getTasks = () => api.get<Task[]>('/api/tasks');
+export const getTask = (id: string) => api.get<Task>(`/api/tasks/${id}`);
 export const createTask = (data: TaskPayload) => api.post('/api/tasks', data);
 export const updateTask = (id: string, data: Partial<TaskPayload>) =>
   api.patch(`/api/tasks/${id}`, data);
