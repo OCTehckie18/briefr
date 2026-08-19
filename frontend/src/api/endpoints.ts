@@ -8,7 +8,7 @@ export const createProject = (data: { name: string; description?: string }) =>
 // ── Meetings ──
 export const getMeetings = () => api.get('/api/meetings');
 export const getMeeting = (id: string) => api.get(`/api/meetings/${id}`);
-export const createMeeting = (data: { title: string; projectId: string; memberIds?: string[] }) =>
+export const createMeeting = (data: { title: string; projectId: string; memberIds?: string[]; meetingType?: 'academic_gd' | 'industry' }) =>
   api.post('/api/meetings', data);
 
 // ── Users ──
@@ -106,3 +106,19 @@ export const createAcademicSession = (data: {
   scheduledAt?: string;
   durationMinutes: number;
 }) => api.post<AcademicSession>('/api/academic/sessions', data);
+
+export interface AcademicTranscriptContext {
+  transcriptId: string;
+  meetingId: string;
+  rawText: string;
+  speakers: string[];
+  students: Pick<AcademicStudent, 'id' | 'studentId' | 'name'>[];
+  session: AcademicSession | null;
+  mappings: Record<string, string>;
+  finalized: boolean;
+}
+
+export const getAcademicTranscriptContext = (transcriptId: string) =>
+  api.get<AcademicTranscriptContext>(`/api/academic/transcripts/${transcriptId}/context`);
+export const updateAcademicTranscriptMapping = (transcriptId: string, data: { mappings: Record<string, string>; finalize: boolean }) =>
+  api.patch(`/api/academic/transcripts/${transcriptId}/mapping`, data);
