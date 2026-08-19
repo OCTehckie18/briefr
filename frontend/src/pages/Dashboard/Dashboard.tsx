@@ -2,17 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Activity, AlertTriangle, CheckSquare, ChevronRight, Clock, ListTodo, Loader2, Sparkles, TrendingUp } from 'lucide-react';
 import { getTasks } from '../../api/endpoints';
+import type { Task } from '../../api/endpoints';
 import { useAuth } from '../../store/AuthContext';
 import { AcademicDashboard } from './AcademicDashboard';
-
-interface Task {
-  id: string;
-  title: string;
-  status: string;
-  priority: string;
-  deadline?: string;
-  assignedTo?: { name: string };
-}
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();

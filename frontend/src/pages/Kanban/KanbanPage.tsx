@@ -1,14 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { getTasks, updateTaskStatus } from '../../api/endpoints';
+import type { Task } from '../../api/endpoints';
 import { Loader2, GripVertical, Inbox } from 'lucide-react';
 
-interface Task {
-  id: string; title: string; description?: string;
-  assignedTo?: { userId: string; name: string; email: string };
-  deadline?: string; priority: string; status: string;
-}
-
-const COLUMNS = [
+const COLUMNS: { key: Task['status']; label: string; dot: string; accent: string }[] = [
   { key: 'todo', label: 'To Do', dot: 'bg-slate-500', accent: 'border-white/[0.06]' },
   { key: 'in_progress', label: 'In Progress', dot: 'bg-amber-400', accent: 'border-amber-500/20' },
   { key: 'done', label: 'Done', dot: 'bg-emerald-400', accent: 'border-emerald-500/20' },
@@ -18,18 +13,32 @@ export const KanbanPage: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [draggedTask, setDraggedTask] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
   useEffect(() => { loadTasks(); }, []);
 
-  const loadTasks = async () => { try { const res = await getTasks(); setTasks(res.data); } finally { setLoading(false); } };
+  const loadTasks = async () => {
+    setError('');
+    try { const res = await getTasks(); setTasks(res.data); }
+    catch (err: any) { setError(err.response?.data?.detail || 'Could not load tasks.'); }
+    finally { setLoading(false); }
+  };
 
-  const handleDrop = async (newStatus: string) => {
+  const handleDrop = async (newStatus: Task['status']) => {
     if (!draggedTask) return;
     const task = tasks.find((t) => t.id === draggedTask);
     if (!task || task.status === newStatus) { setDraggedTask(null); return; }
+    const previousTasks = tasks;
     setTasks((prev) => prev.map((t) => (t.id === draggedTask ? { ...t, status: newStatus } : t)));
     setDraggedTask(null);
-    try { await updateTaskStatus(task.id, newStatus); } catch { loadTasks(); }
+    setError('');
+    try {
+      const response = await updateTaskStatus(task.id, newStatus);
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? response.data : t)));
+    } catch (err: any) {
+      setTasks(previousTasks);
+      setError(err.response?.data?.detail || 'Could not save that status change.');
+    }
   };
 
   const getInitials = (name: string) => name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
@@ -44,6 +53,7 @@ export const KanbanPage: React.FC = () => {
           <p className="page-description">Drag and drop tasks to keep every meeting follow-up moving.</p>
         </div>
       </div>
+      {error && <div className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400"><span>{error}</span><button onClick={loadTasks} className="font-semibold text-red-300 hover:text-white">Retry</button></div>}
       <div className="grid min-h-[500px] flex-1 grid-cols-1 gap-5 md:grid-cols-3">
         {COLUMNS.map((col) => {
           const columnTasks = tasks.filter((t) => t.status === col.key);
