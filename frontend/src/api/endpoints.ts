@@ -154,3 +154,11 @@ export const getAcademicAssessments = (transcriptId: string) =>
   api.get<AcademicAssessment[]>('/api/academic/assessments', { params: { transcriptId } });
 export const reviewAcademicAssessment = (assessmentId: string, data: { scores: AcademicAssessmentScore[]; reviewNote: string }) =>
   api.patch<AcademicAssessment>(`/api/academic/assessments/${assessmentId}/review`, data);
+export interface AcademicReport extends Omit<AcademicAssessment, 'status' | 'generatedAt'> {
+  assessmentId: string;
+  publishedBy: string;
+  publishedAt: string;
+}
+export const publishAcademicAssessment = (assessmentId: string) =>
+  api.post<AcademicReport>(`/api/academic/assessments/${assessmentId}/publish`);
+export const getAcademicReports = () => api.get<AcademicReport[]>('/api/academic/reports');
