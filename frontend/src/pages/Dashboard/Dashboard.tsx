@@ -11,16 +11,20 @@ export const Dashboard: React.FC = () => {
   const { user, isAdmin, track } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [retryAttempt, setRetryAttempt] = useState(0);
 
   useEffect(() => {
     if (track === 'academic_gd') {
       setLoading(false);
       return;
     }
+    setError('');
     getTasks()
       .then((res) => setTasks(res.data))
+      .catch((err: any) => setError(err.response?.data?.detail || 'Could not load your tasks.'))
       .finally(() => setLoading(false));
-  }, [track]);
+  }, [track, retryAttempt]);
 
   if (track === 'academic_gd') return <AcademicDashboard />;
 
@@ -48,6 +52,18 @@ export const Dashboard: React.FC = () => {
     return (
       <div className="flex min-h-[320px] items-center justify-center rounded-[24px] border border-white/10 bg-white/5">
         <Loader2 size={24} className="animate-spin text-cyan-400" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="page-shell space-y-4">
+        <div className="rounded-[24px] border border-red-500/20 bg-red-500/10 p-6 text-red-300">
+          <h2 className="font-semibold">Dashboard unavailable</h2>
+          <p className="mt-2 text-sm text-red-300/80">{error}</p>
+          <button onClick={() => { setLoading(true); setError(''); setRetryAttempt((attempt) => attempt + 1); }} className="mt-4 rounded-lg border border-red-400/20 px-3 py-2 text-sm font-semibold text-red-200 hover:bg-red-500/10">Retry</button>
+        </div>
       </div>
     );
   }

@@ -13,6 +13,7 @@ export const HistoryPage: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
@@ -24,7 +25,7 @@ export const HistoryPage: React.FC = () => {
       })
       .catch(() => setError('Could not load meeting history. Please refresh and try again.'))
       .finally(() => setLoading(false));
-  }, [track]);
+  }, [track, retryAttempt]);
 
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 size={28} className="animate-spin text-cyan-400" /></div>;
 
@@ -37,7 +38,7 @@ export const HistoryPage: React.FC = () => {
         </div>
       </div>
 
-      {error && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">{error}</div>}
+      {error && <div className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400"><span>{error}</span><button onClick={() => { setLoading(true); setRetryAttempt((attempt) => attempt + 1); }} className="font-semibold text-red-300 hover:text-white">Retry</button></div>}
 
       <div className="space-y-3">
         {meetings.length === 0 && <div className="ui-card empty-state"><Inbox size={22} /><span>No meetings have been processed yet.</span></div>}
