@@ -47,7 +47,7 @@ export const AppLayout: React.FC = () => {
     <div className={`flex h-screen w-screen overflow-hidden ${isAcademic ? 'academic-app-shell' : 'bg-black text-white'}`}>
       <aside className={`hidden w-72 flex-col md:flex ${isAcademic ? 'academic-sidebar' : 'border-r border-[#202020] bg-black'}`}>
         <div className="flex h-20 items-center gap-3 border-b border-[#202020] px-6">
-          <div className="flex h-10 w-10 items-center justify-center border border-[#ffc000] bg-[#ffc000] text-sm font-bold text-black">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white bg-white text-sm font-bold text-black">
             B
           </div>
           <div>
@@ -67,14 +67,14 @@ export const AppLayout: React.FC = () => {
                 className={({ isActive }) =>
                   `flex items-center gap-3 rounded-[14px] px-3 py-2.5 text-sm font-medium transition-all ${
                     isActive
-                      ? isAcademic ? 'academic-nav-link--active' : 'border-l-2 border-[#ffc000] bg-[#202020] text-white'
+                      ? isAcademic ? 'academic-nav-link--active' : 'border-l-2 border-white bg-[#0a0a0a] text-white'
                       : isAcademic ? 'academic-nav-link' : 'text-[#7d7d7d] hover:bg-[#181818] hover:text-white'
                   }`
                 }
               >
                 {({ isActive }) => (
                   <>
-                    <span className={`flex h-8 w-8 items-center justify-center ${isAcademic ? (isActive ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400') : (isActive ? 'bg-[#ffc000] text-black' : 'bg-[#202020] text-[#7d7d7d]')}`}>
+                    <span className={`flex h-8 w-8 items-center justify-center ${isAcademic ? (isActive ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400') : (isActive ? 'bg-white text-black' : 'bg-[#0a0a0a] text-[#5a5a5f]')}`}>
                       <Icon size={16} />
                     </span>
                     <span>{item.label}</span>
@@ -119,7 +119,7 @@ export const AppLayout: React.FC = () => {
                   {user?.role === 'admin' ? 'Admin' : 'Member'}
                 </div>
               </div>
-              <div className={`flex h-9 w-9 items-center justify-center text-xs font-semibold ${isAcademic ? 'bg-indigo-100 text-indigo-700' : 'bg-[#ffc000] text-black'}`}>
+              <div className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold ${isAcademic ? 'bg-indigo-100 text-indigo-700' : 'bg-white text-black'}`}>
                 {user ? getInitials(user.name) : '??'}
               </div>
             </div>
