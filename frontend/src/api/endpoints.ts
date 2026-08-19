@@ -14,13 +14,39 @@ export const createProject = (data: { name: string; description?: string }) =>
   api.post('/api/projects', data);
 
 // ── Meetings ──
-export const getMeetings = () => api.get('/api/meetings');
-export const getMeeting = (id: string) => api.get(`/api/meetings/${id}`);
-export const createMeeting = (data: { title: string; projectId: string; memberIds?: string[]; meetingType?: 'academic_gd' | 'industry' }) =>
-  api.post('/api/meetings', data);
+export interface Meeting {
+  id: string;
+  title: string;
+  projectId: string;
+  hostId: string;
+  memberIds: string[];
+  scheduledAt?: string | null;
+  createdAt: string;
+  meetingLink?: string | null;
+  botStatus?: 'pending' | 'joining' | 'recording' | 'done' | 'failed' | null;
+  meetingType: 'academic_gd' | 'industry';
+}
+
+export const getMeetings = () => api.get<Meeting[]>('/api/meetings');
+export const getMeeting = (id: string) => api.get<Meeting>(`/api/meetings/${id}`);
+export const createMeeting = (data: {
+  title: string;
+  projectId: string;
+  memberIds?: string[];
+  scheduledAt?: string;
+  meetingLink?: string;
+  meetingType?: 'academic_gd' | 'industry';
+}) => api.post<Meeting>('/api/meetings', data);
 
 // ── Users ──
-export const getUsers = () => api.get('/api/users');
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export const getUsers = () => api.get<User[]>('/api/users');
 
 // ── Transcripts ──
 export const getTranscripts = () => api.get('/api/transcripts');
