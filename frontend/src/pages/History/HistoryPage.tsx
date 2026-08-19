@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { getMeetings, getTranscripts, getTasks } from '../../api/endpoints';
 import { ChevronDown, ChevronRight, FileText, CheckSquare, Loader2, CalendarDays, Inbox } from 'lucide-react';
+import { useAuth } from '../../store/AuthContext';
 
 export const HistoryPage: React.FC = () => {
+  const { track } = useAuth();
   const [meetings, setMeetings] = useState<any[]>([]);
   const [transcripts, setTranscripts] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
@@ -21,8 +23,8 @@ export const HistoryPage: React.FC = () => {
     <div className="page-shell space-y-6">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Meeting history</h1>
-          <p className="page-description">Browse past meetings, their source transcripts, and extracted action items.</p>
+          <h1 className="page-title">{track === 'academic_gd' ? 'Evaluation sheets' : 'Meeting history'}</h1>
+          <p className="page-description">{track === 'academic_gd' ? 'Review completed GD assessments, evidence excerpts, score adjustments, and published student reports.' : 'Browse past meetings, their source transcripts, and extracted action items.'}</p>
         </div>
       </div>
 

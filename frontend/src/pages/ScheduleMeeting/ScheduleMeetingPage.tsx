@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Video,
   Calendar,
@@ -15,6 +14,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import axiosClient from '../../api/axios';
+import { useAuth } from '../../store/AuthContext';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -124,8 +124,7 @@ function MeetingStatusCard({ meeting, onDismiss }: { meeting: Meeting; onDismiss
 // ── Main page ──────────────────────────────────────────────────────────────
 
 export const ScheduleMeetingPage: React.FC = () => {
-  const navigate = useNavigate();
-
+  const { track } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -183,6 +182,7 @@ export const ScheduleMeetingPage: React.FC = () => {
         meetingLink: meetingLink.trim(),
         scheduledAt: new Date(scheduledAt).toISOString(),
         memberIds: selectedMembers,
+        meetingType: track || 'industry',
       });
 
       // Add to local status tracker
@@ -216,7 +216,7 @@ export const ScheduleMeetingPage: React.FC = () => {
     <div className="page-shell">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Schedule Meeting</h1>
+          <h1 className="page-title">{track === 'academic_gd' ? 'Schedule a GD' : 'Schedule Meeting'}</h1>
           <p className="page-description">
             Add a Google Meet link and datetime — Briefr Bot will join automatically, transcribe, and generate tasks.
           </p>
@@ -360,7 +360,7 @@ export const ScheduleMeetingPage: React.FC = () => {
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/20 transition hover:opacity-90 disabled:opacity-50"
             >
               {submitting ? <Loader2 size={16} className="animate-spin" /> : <Video size={16} />}
-              {submitting ? 'Scheduling…' : 'Schedule Meeting'}
+              {submitting ? 'Scheduling…' : track === 'academic_gd' ? 'Schedule GD' : 'Schedule Meeting'}
             </button>
           </div>
         </form>

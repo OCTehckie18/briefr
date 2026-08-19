@@ -43,6 +43,9 @@ def transcribe():
 
     Request:  multipart/form-data with field 'file' containing audio data.
     Response: { "text": "full transcript...", "segments": [...], "language": "en" }
+    Each segment has start/end/text and a nullable speaker. The speaker is
+    deliberately nullable: Whisper transcribes speech but does not identify
+    people.
     """
     if "file" not in request.files:
         return jsonify({"error": "No 'file' field in request"}), 400
@@ -86,6 +89,7 @@ def transcribe():
                 "start": round(seg.start, 2),
                 "end": round(seg.end, 2),
                 "text": seg.text.strip(),
+                "speaker": None,
             })
             full_text_parts.append(seg.text.strip())
 

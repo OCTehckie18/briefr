@@ -2,7 +2,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { getTranscript, processTranscript } from '../../api/endpoints';
 import {
-  Loader2, Sparkles, AlertCircle, FileText, CheckCircle2,
+  Loader2, Sparkles, AlertCircle, FileText,
   ChevronRight, Calendar, User, UserX, ListChecks,
 } from 'lucide-react';
 

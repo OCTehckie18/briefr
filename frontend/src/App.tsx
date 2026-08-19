@@ -9,6 +9,7 @@ import { KanbanPage } from './pages/Kanban/KanbanPage';
 import { CalendarPage } from './pages/Calendar/CalendarPage';
 import { HistoryPage } from './pages/History/HistoryPage';
 import { ScheduleMeetingPage } from './pages/ScheduleMeeting/ScheduleMeetingPage';
+import { TrackSelectionPage } from './pages/TrackSelection/TrackSelectionPage';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -24,15 +25,19 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppRoutes() {
-  const { user } = useAuth();
+  const { user, track } = useAuth();
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage />} />
+      <Route
+        path="/login"
+        element={user ? <Navigate to="/" /> : track ? <LoginPage /> : <Navigate to="/select-track" replace />}
+      />
+      <Route path="/select-track" element={<TrackSelectionPage />} />
       <Route
         path="/"
         element={
           <PrivateRoute>
-            <AppLayout />
+            {track ? <AppLayout /> : <Navigate to="/select-track" replace />}
           </PrivateRoute>
         }
       >

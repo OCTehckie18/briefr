@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     # Frontend URL (for CORS)
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # Internal meeting bot service URLs
+    BOT_SERVICE_URL: str = "http://localhost:3001"
+    BACKEND_SERVICE_URL: str = "http://localhost:8000"
+    BOT_TOKEN_TTL_MINUTES: int = 180
+    BOT_LOOKBACK_MINUTES: int = 15
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

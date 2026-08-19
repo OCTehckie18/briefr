@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { getTasks } from '../../api/endpoints';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Loader2, Plus } from 'lucide-react';
+import { useAuth } from '../../store/AuthContext';
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, addMonths, subMonths, format, isSameMonth, isSameDay, isToday } from 'date-fns';
 
 interface Task { id: string; title: string; deadline?: string; priority: string; status: string; assignedTo?: { name: string }; }
 
 export const CalendarPage: React.FC = () => {
+  const { track } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -70,8 +72,9 @@ export const CalendarPage: React.FC = () => {
     <div className="page-shell flex h-full flex-col space-y-6">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Schedule</h1>
-          <p className="page-description">Track task deadlines and priorities across the month.</p>
+          <h1 className="page-title">{track === 'academic_gd' ? 'GD calendar' : 'Schedule'}</h1>
+          <p className="page-description">{track === 'academic_gd' ? 'View group discussions by class, topic, evaluator, and scheduled time.' : 'Track task deadlines and priorities across the month.'}</p>
+          {track === 'academic_gd' && <button className="academic-primary-button"><Plus size={16} /> Add GD event</button>}
         </div>
       </div>
       <div className="flex min-h-[550px] flex-1 flex-col gap-5 xl:flex-row">

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Activity, AlertTriangle, CheckSquare, ChevronRight, Clock, ListTodo, Loader2, Sparkles, TrendingUp } from 'lucide-react';
 import { getTasks } from '../../api/endpoints';
 import { useAuth } from '../../store/AuthContext';
+import { AcademicDashboard } from './AcademicDashboard';
 
 interface Task {
   id: string;
@@ -15,15 +16,21 @@ interface Task {
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, track } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (track === 'academic_gd') {
+      setLoading(false);
+      return;
+    }
     getTasks()
       .then((res) => setTasks(res.data))
       .finally(() => setLoading(false));
-  }, []);
+  }, [track]);
+
+  if (track === 'academic_gd') return <AcademicDashboard />;
 
   const totalTasks = tasks.length;
   const inProgressTasks = tasks.filter((t) => t.status === 'in_progress').length;
