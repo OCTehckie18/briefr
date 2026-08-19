@@ -143,9 +143,14 @@ export interface AcademicAssessment {
   summary: string;
   status: 'ai_recommendation' | 'reviewed';
   generatedAt: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewNote?: string;
 }
 
 export const generateAcademicAssessments = (transcriptId: string) =>
   api.post<AcademicAssessment[]>(`/api/academic/transcripts/${transcriptId}/assess`);
 export const getAcademicAssessments = (transcriptId: string) =>
   api.get<AcademicAssessment[]>('/api/academic/assessments', { params: { transcriptId } });
+export const reviewAcademicAssessment = (assessmentId: string, data: { scores: AcademicAssessmentScore[]; reviewNote: string }) =>
+  api.patch<AcademicAssessment>(`/api/academic/assessments/${assessmentId}/review`, data);

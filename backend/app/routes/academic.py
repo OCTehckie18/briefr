@@ -23,7 +23,7 @@ from app.models.academic import (
     StudentOut,
     ParticipantMappingUpdate,
 )
-from app.models.assessment import AcademicAssessmentOut
+from app.models.assessment import AcademicAssessmentOut, AcademicAssessmentReview
 
 router = APIRouter()
 
@@ -285,6 +285,7 @@ async def assess_transcript(
             "sessionId": str(session["_id"]) if session else "",
             "studentId": item["studentId"],
             "scores": item.get("scores", []),
+            "aiScores": item.get("scores", []),
             "strengths": item.get("strengths", []),
             "improvements": item.get("improvements", []),
             "summary": item.get("summary", ""),
@@ -304,3 +305,39 @@ async def list_assessments(
 ):
     query = {"transcriptId": transcriptId} if transcriptId else {}
     return [AcademicAssessmentOut(id=str(doc["_id"]), **{key: value for key, value in doc.items() if key != "_id"}) async for doc in academic_assessments_col.find(query).sort("generatedAt", -1)]
+
+
+@router.patch("/assessments/{assessment_id}/review", response_model=AcademicAssessmentOut)
+async def review_assessment(
+    assessment_id: str,
+    data: AcademicAssessmentReview,
+    current_user: dict = Depends(require_admin),
+):
+    assessment = await academic_assessments_col.find_one({"_id": _id(assessment_id)})
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    reviewed_at = datetime.now(timezone.utc)
+    await academic_assessments_col.update_one(
+        {"_id": _id(assessment_id)},
+        {"$set": {
+            "scores": [score.model_dump() for score in data.scores],
+            "reviewNote": data.reviewNote,
+            "reviewedBy": str(current_user["_id"]),
+            "reviewedAt": reviewed_at,
+            "status": "reviewed",
+        }, "$push": {"reviewHistory": {
+            "scores": [score.model_dump() for score in data.scores],
+            "reviewNote": data.reviewNote,
+            "reviewedBy": str(current_user["_id"]),
+            "reviewedAt": reviewed_at,
+        }}},
+    )
+    assessment.update({
+        "scores": [score.model_dump() for score in data.scores],
+        "reviewNote": data.reviewNote,
+        "reviewedBy": str(current_user["_id"]),
+        "reviewedAt": reviewed_at,
+        "status": "reviewed",
+    })
+    return AcademicAssessmentOut(id=str(assessment["_id"]), **{key: value for key, value in assessment.items() if key != "_id"})
