@@ -22,7 +22,7 @@ export const TrackSelectionPage: React.FC = () => {
       <section className="track-selection__shell">
         <div className="track-selection__header">
           <div className="brand-mark" aria-hidden="true">B</div>
-          <div>
+          <div className="track-selection__brand-copy">
             <p className="eyebrow">Briefr workspace</p>
             <p className="track-selection__signed-in">{user ? `Signed in as ${user.name}` : 'Choose your workspace to continue'}</p>
           </div>
@@ -40,6 +40,7 @@ export const TrackSelectionPage: React.FC = () => {
             </button>
           ))}
         </div>
+        <p className="track-selection__footer">You can switch workspaces anytime from your profile.</p>
       </section>
     </main>
   );
