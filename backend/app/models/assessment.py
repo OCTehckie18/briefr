@@ -29,3 +29,11 @@ class AcademicAssessmentOut(BaseModel):
     summary: str
     status: Literal["ai_recommendation", "reviewed"]
     generatedAt: datetime
+    reviewedBy: str | None = None
+    reviewedAt: datetime | None = None
+    reviewNote: str = ""
+
+
+class AcademicAssessmentReview(BaseModel):
+    scores: List[AssessmentDimensionScore]
+    reviewNote: str = Field(default="", max_length=2000)
