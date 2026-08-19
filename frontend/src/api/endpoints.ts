@@ -1,7 +1,15 @@
 import api from './axios';
 
 // ── Projects ──
-export const getProjects = () => api.get('/api/projects');
+export interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  adminId: string;
+  createdAt: string;
+}
+
+export const getProjects = () => api.get<Project[]>('/api/projects');
 export const createProject = (data: { name: string; description?: string }) =>
   api.post('/api/projects', data);
 
