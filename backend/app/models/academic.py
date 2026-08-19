@@ -67,3 +67,8 @@ class AcademicSessionOut(AcademicSessionCreate):
         "draft", "scheduled", "processing", "ready_for_review", "published"
     ]
     createdAt: datetime
+
+
+class ParticipantMappingUpdate(BaseModel):
+    mappings: dict[str, str] = Field(default_factory=dict)
+    finalize: bool = False

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import re
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
@@ -19,6 +20,7 @@ from app.models.academic import (
     RubricOut,
     StudentCreate,
     StudentOut,
+    ParticipantMappingUpdate,
 )
 
 router = APIRouter()
@@ -157,3 +159,79 @@ async def create_session(
 async def list_sessions(current_user: dict = Depends(get_current_user)):
     query = {} if current_user.get("role") == "admin" else {"evaluatorId": str(current_user["_id"])}
     return [_session_out(doc) async for doc in academic_sessions_col.find(query).sort("createdAt", -1)]
+
+
+def _speaker_names(raw_text: str) -> list[str]:
+    names: list[str] = []
+    for line in raw_text.splitlines():
+        match = re.match(r"^\s*(?:\[[^\]]+\]\s*)?([^:\n]{1,100}):\s*.+$", line)
+        if match:
+            name = match.group(1).strip()
+            if name and name.lower() not in {item.lower() for item in names}:
+                names.append(name)
+    return names
+
+
+@router.get("/transcripts/{transcript_id}/context")
+async def get_transcript_context(
+    transcript_id: str, current_user: dict = Depends(get_current_user)
+):
+    from app.db import transcripts_col
+
+    transcript = await transcripts_col.find_one({"_id": _id(transcript_id)})
+    if not transcript:
+        raise HTTPException(status_code=404, detail="Transcript not found")
+
+    session = await academic_sessions_col.find_one({"meetingId": transcript.get("meetingId")})
+    students: list[dict] = []
+    session_out = None
+    if session:
+        participant_ids = session.get("participantIds", [])
+        async for student in academic_students_col.find({"_id": {"$in": [_id(value) for value in participant_ids]}}).sort("name", 1):
+            students.append({"id": str(student["_id"]), "studentId": student["studentId"], "name": student["name"]})
+        session_out = _session_out(session).model_dump()
+    else:
+        # Recorded transcripts created by the legacy ingest flow may predate
+        # an academic-session link. Keep mapping usable while that link is
+        # established by exposing the authenticated academic student roster.
+        async for student in academic_students_col.find().sort("name", 1):
+            students.append({"id": str(student["_id"]), "studentId": student["studentId"], "name": student["name"]})
+
+    return {
+        "transcriptId": transcript_id,
+        "meetingId": transcript.get("meetingId", ""),
+        "rawText": transcript.get("rawText", ""),
+        "speakers": _speaker_names(transcript.get("rawText", "")),
+        "students": students,
+        "session": session_out,
+        "mappings": transcript.get("academicParticipantMappings", {}),
+        "finalized": transcript.get("academicMappingFinalized", False),
+    }
+
+
+@router.patch("/transcripts/{transcript_id}/mapping")
+async def update_transcript_mapping(
+    transcript_id: str,
+    data: ParticipantMappingUpdate,
+    current_user: dict = Depends(require_admin),
+):
+    from app.db import transcripts_col
+
+    transcript = await transcripts_col.find_one({"_id": _id(transcript_id)})
+    if not transcript:
+        raise HTTPException(status_code=404, detail="Transcript not found")
+
+    session = await academic_sessions_col.find_one({"meetingId": transcript.get("meetingId")})
+    allowed_ids = set(session.get("participantIds", [])) if session else set()
+    if allowed_ids and any(value not in allowed_ids for value in data.mappings.values()):
+        raise HTTPException(status_code=400, detail="Mapping includes a student outside this session")
+
+    await transcripts_col.update_one(
+        {"_id": _id(transcript_id)},
+        {"$set": {
+            "academicParticipantMappings": data.mappings,
+            "academicMappingFinalized": data.finalize,
+            "academicMappingUpdatedAt": datetime.now(timezone.utc),
+        }},
+    )
+    return {"detail": "Participant mapping updated", "finalized": data.finalize, "mappings": data.mappings}

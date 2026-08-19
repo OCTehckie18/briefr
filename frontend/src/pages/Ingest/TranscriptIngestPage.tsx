@@ -26,9 +26,9 @@ export const TranscriptIngestPage: React.FC = () => {
     if (!transcriptText.trim() || !meetingTitle.trim()) return;
     setError(''); setLoading(true);
     try {
-      const meetingRes = await createMeeting({ title: meetingTitle, projectId: selectedProject });
+      const meetingRes = await createMeeting({ title: meetingTitle, projectId: selectedProject, meetingType: track === 'academic_gd' ? 'academic_gd' : 'industry' });
       const transcriptRes = await createTranscript({ meetingId: meetingRes.data.id, rawText: transcriptText });
-      navigate(`/transcripts/${transcriptRes.data.id}/review`);
+      navigate(track === 'academic_gd' ? `/academic/transcripts/${transcriptRes.data.id}/map` : `/transcripts/${transcriptRes.data.id}/review`);
     } catch (err: any) { setError(err.response?.data?.detail || 'Failed to submit'); setLoading(false); }
   };
 
