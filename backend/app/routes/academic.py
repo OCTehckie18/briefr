@@ -190,6 +190,12 @@ async def get_transcript_context(
         async for student in academic_students_col.find({"_id": {"$in": [_id(value) for value in participant_ids]}}).sort("name", 1):
             students.append({"id": str(student["_id"]), "studentId": student["studentId"], "name": student["name"]})
         session_out = _session_out(session).model_dump()
+    else:
+        # Recorded transcripts created by the legacy ingest flow may predate
+        # an academic-session link. Keep mapping usable while that link is
+        # established by exposing the authenticated academic student roster.
+        async for student in academic_students_col.find().sort("name", 1):
+            students.append({"id": str(student["_id"]), "studentId": student["studentId"], "name": student["name"]})
 
     return {
         "transcriptId": transcript_id,
