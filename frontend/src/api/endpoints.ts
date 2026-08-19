@@ -106,6 +106,7 @@ export const createAcademicSession = (data: {
   scheduledAt?: string;
   durationMinutes: number;
 }) => api.post<AcademicSession>('/api/academic/sessions', data);
+export const getAcademicSessions = () => api.get<AcademicSession[]>('/api/academic/sessions');
 
 export interface AcademicTranscriptContext {
   transcriptId: string;
@@ -150,8 +151,8 @@ export interface AcademicAssessment {
 
 export const generateAcademicAssessments = (transcriptId: string) =>
   api.post<AcademicAssessment[]>(`/api/academic/transcripts/${transcriptId}/assess`);
-export const getAcademicAssessments = (transcriptId: string) =>
-  api.get<AcademicAssessment[]>('/api/academic/assessments', { params: { transcriptId } });
+export const getAcademicAssessments = (transcriptId?: string) =>
+  api.get<AcademicAssessment[]>('/api/academic/assessments', { params: transcriptId ? { transcriptId } : undefined });
 export const reviewAcademicAssessment = (assessmentId: string, data: { scores: AcademicAssessmentScore[]; reviewNote: string }) =>
   api.patch<AcademicAssessment>(`/api/academic/assessments/${assessmentId}/review`, data);
 export interface AcademicReport extends Omit<AcademicAssessment, 'status' | 'generatedAt'> {
