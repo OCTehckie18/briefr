@@ -10,6 +10,7 @@ from app.db import (
     academic_sessions_col,
     academic_students_col,
     academic_assessments_col,
+    academic_reports_col,
 )
 from app.dependencies import get_current_user, require_admin
 from app.models.academic import (
@@ -24,6 +25,7 @@ from app.models.academic import (
     ParticipantMappingUpdate,
 )
 from app.models.assessment import AcademicAssessmentOut, AcademicAssessmentReview
+from app.models.report import AcademicReportOut
 
 router = APIRouter()
 
@@ -341,3 +343,39 @@ async def review_assessment(
         "status": "reviewed",
     })
     return AcademicAssessmentOut(id=str(assessment["_id"]), **{key: value for key, value in assessment.items() if key != "_id"})
+
+
+@router.post("/assessments/{assessment_id}/publish", response_model=AcademicReportOut)
+async def publish_assessment(
+    assessment_id: str, current_user: dict = Depends(require_admin)
+):
+    assessment = await academic_assessments_col.find_one({"_id": _id(assessment_id)})
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+    if assessment.get("status") != "reviewed":
+        raise HTTPException(status_code=400, detail="Review the assessment before publishing")
+
+    existing = await academic_reports_col.find_one({"assessmentId": assessment_id})
+    if existing:
+        return AcademicReportOut(id=str(existing["_id"]), **{key: value for key, value in existing.items() if key != "_id"})
+
+    published_at = datetime.now(timezone.utc)
+    report = {
+        "assessmentId": assessment_id,
+        "transcriptId": assessment["transcriptId"],
+        "studentId": assessment["studentId"],
+        "scores": assessment["scores"],
+        "strengths": assessment.get("strengths", []),
+        "improvements": assessment.get("improvements", []),
+        "summary": assessment.get("summary", ""),
+        "publishedBy": str(current_user["_id"]),
+        "publishedAt": published_at,
+    }
+    result = await academic_reports_col.insert_one(report)
+    report["_id"] = result.inserted_id
+    return AcademicReportOut(id=str(result.inserted_id), **{key: value for key, value in report.items() if key != "_id"})
+
+
+@router.get("/reports", response_model=list[AcademicReportOut])
+async def list_reports(current_user: dict = Depends(get_current_user)):
+    return [AcademicReportOut(id=str(doc["_id"]), **{key: value for key, value in doc.items() if key != "_id"}) async for doc in academic_reports_col.find().sort("publishedAt", -1)]

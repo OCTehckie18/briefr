@@ -24,7 +24,7 @@ export const AppLayout: React.FC = () => {
         ...(isAdmin ? [{ to: '/ingest', label: 'Analyze Recorded GD', icon: FileText, end: false }] : []),
         ...(isAdmin ? [{ to: '/academic/sessions/new', label: 'Schedule GD', icon: Video, end: false }] : []),
         { to: '/calendar', label: 'GD Calendar', icon: CalendarDays, end: false },
-        { to: '/history', label: 'Evaluation Sheets', icon: History, end: false },
+        { to: '/academic/reports', label: 'Evaluation Sheets', icon: History, end: false },
       ]
     : [
         { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
