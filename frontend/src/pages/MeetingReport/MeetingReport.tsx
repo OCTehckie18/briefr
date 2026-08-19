@@ -20,6 +20,7 @@ export const MeetingReport: React.FC = () => {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const [updatingTask, setUpdatingTask] = useState<string | null>(null);
 
   useEffect(() => {
@@ -34,7 +35,13 @@ export const MeetingReport: React.FC = () => {
       })
       .catch((err: any) => setError(err.response?.data?.detail || 'Could not load this meeting.'))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, retryAttempt]);
+
+  const retry = () => {
+    setLoading(true);
+    setError('');
+    setRetryAttempt((attempt) => attempt + 1);
+  };
 
   const transcriptParts = useMemo(() => {
     const text = transcript?.rawText || '';
@@ -55,7 +62,7 @@ export const MeetingReport: React.FC = () => {
   };
 
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 size={28} className="animate-spin text-cyan-400" /></div>;
-  if (error && !meeting) return <div className="page-shell space-y-4"><div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400"><AlertCircle className="mr-2 inline" size={16} />{error}</div><button onClick={() => navigate('/history')} className="text-sm text-cyan-400">Back to history</button></div>;
+  if (error && !meeting) return <div className="page-shell space-y-4"><div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400"><AlertCircle className="mr-2 inline" size={16} />{error}</div><div className="flex gap-4"><button onClick={retry} className="text-sm font-semibold text-cyan-400">Retry</button><button onClick={() => navigate('/history')} className="text-sm text-slate-500">Back to history</button></div></div>;
   if (!meeting) return null;
 
   return (
@@ -68,7 +75,7 @@ export const MeetingReport: React.FC = () => {
         </div>
         {meeting.botStatus && <Badge variant={meeting.botStatus === 'failed' ? 'danger' : meeting.botStatus === 'done' ? 'success' : 'warning'}>{statusLabel[meeting.botStatus] || meeting.botStatus}</Badge>}
       </div>
-      {error && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400"><AlertCircle className="mr-2 inline" size={15} />{error}</div>}
+      {error && <div className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400"><span><AlertCircle className="mr-2 inline" size={15} />{error}</span><button onClick={retry} className="font-semibold text-red-300 hover:text-white">Retry</button></div>}
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <section className="ui-card overflow-hidden">
