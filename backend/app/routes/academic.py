@@ -9,6 +9,7 @@ from app.db import (
     academic_rubrics_col,
     academic_sessions_col,
     academic_students_col,
+    academic_assessments_col,
 )
 from app.dependencies import get_current_user, require_admin
 from app.models.academic import (
@@ -22,6 +23,7 @@ from app.models.academic import (
     StudentOut,
     ParticipantMappingUpdate,
 )
+from app.models.assessment import AcademicAssessmentOut
 
 router = APIRouter()
 
@@ -235,3 +237,70 @@ async def update_transcript_mapping(
         }},
     )
     return {"detail": "Participant mapping updated", "finalized": data.finalize, "mappings": data.mappings}
+
+
+@router.post("/transcripts/{transcript_id}/assess", response_model=list[AcademicAssessmentOut])
+async def assess_transcript(
+    transcript_id: str, current_user: dict = Depends(require_admin)
+):
+    from app.db import transcripts_col
+    from app.services.academic_llm import generate_academic_assessments
+
+    transcript = await transcripts_col.find_one({"_id": _id(transcript_id)})
+    if not transcript:
+        raise HTTPException(status_code=404, detail="Transcript not found")
+    if not transcript.get("academicMappingFinalized"):
+        raise HTTPException(status_code=400, detail="Finalize participant mapping before assessment")
+
+    session = await academic_sessions_col.find_one({"meetingId": transcript.get("meetingId")})
+    rubric = await academic_rubrics_col.find_one({"_id": _id(session["rubricId"])}) if session else await academic_rubrics_col.find_one()
+    if not rubric:
+        raise HTTPException(status_code=400, detail="No academic rubric is available")
+
+    mappings = transcript.get("academicParticipantMappings", {})
+    students_by_id: dict[str, dict] = {}
+    async for student in academic_students_col.find({"_id": {"$in": [_id(value) for value in mappings.values()]}}):
+        students_by_id[str(student["_id"])] = student
+    participants = []
+    for speaker, student_id in mappings.items():
+        student = students_by_id.get(student_id)
+        if student:
+            participants.append({"speaker": speaker, "studentId": student_id, "name": student["name"]})
+    if not participants:
+        raise HTTPException(status_code=400, detail="No mapped students found")
+
+    try:
+        generated = await generate_academic_assessments(transcript.get("rawText", ""), participants, rubric)
+    except (ValueError, Exception) as exc:
+        raise HTTPException(status_code=502, detail=f"Academic assessment generation failed: {exc}") from exc
+
+    await academic_assessments_col.delete_many({"transcriptId": transcript_id})
+    now = datetime.now(timezone.utc)
+    documents = []
+    for item in generated["assessments"]:
+        if item.get("studentId") not in students_by_id:
+            continue
+        document = {
+            "transcriptId": transcript_id,
+            "sessionId": str(session["_id"]) if session else "",
+            "studentId": item["studentId"],
+            "scores": item.get("scores", []),
+            "strengths": item.get("strengths", []),
+            "improvements": item.get("improvements", []),
+            "summary": item.get("summary", ""),
+            "status": "ai_recommendation",
+            "generatedAt": now,
+        }
+        result = await academic_assessments_col.insert_one(document)
+        document["_id"] = result.inserted_id
+        documents.append(document)
+
+    return [AcademicAssessmentOut(id=str(doc["_id"]), **{key: value for key, value in doc.items() if key != "_id"}) for doc in documents]
+
+
+@router.get("/assessments", response_model=list[AcademicAssessmentOut])
+async def list_assessments(
+    transcriptId: str | None = None, current_user: dict = Depends(get_current_user)
+):
+    query = {"transcriptId": transcriptId} if transcriptId else {}
+    return [AcademicAssessmentOut(id=str(doc["_id"]), **{key: value for key, value in doc.items() if key != "_id"}) async for doc in academic_assessments_col.find(query).sort("generatedAt", -1)]

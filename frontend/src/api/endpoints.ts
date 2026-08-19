@@ -122,3 +122,30 @@ export const getAcademicTranscriptContext = (transcriptId: string) =>
   api.get<AcademicTranscriptContext>(`/api/academic/transcripts/${transcriptId}/context`);
 export const updateAcademicTranscriptMapping = (transcriptId: string, data: { mappings: Record<string, string>; finalize: boolean }) =>
   api.patch(`/api/academic/transcripts/${transcriptId}/mapping`, data);
+
+export interface AcademicAssessmentScore {
+  key: string;
+  label: string;
+  score: number;
+  maxScore: number;
+  rationale: string;
+  evidence: { quote: string; timestamp: string }[];
+}
+
+export interface AcademicAssessment {
+  id: string;
+  transcriptId: string;
+  sessionId: string;
+  studentId: string;
+  scores: AcademicAssessmentScore[];
+  strengths: string[];
+  improvements: string[];
+  summary: string;
+  status: 'ai_recommendation' | 'reviewed';
+  generatedAt: string;
+}
+
+export const generateAcademicAssessments = (transcriptId: string) =>
+  api.post<AcademicAssessment[]>(`/api/academic/transcripts/${transcriptId}/assess`);
+export const getAcademicAssessments = (transcriptId: string) =>
+  api.get<AcademicAssessment[]>('/api/academic/assessments', { params: { transcriptId } });

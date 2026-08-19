@@ -12,6 +12,7 @@ import { ScheduleMeetingPage } from './pages/ScheduleMeeting/ScheduleMeetingPage
 import { TrackSelectionPage } from './pages/TrackSelection/TrackSelectionPage';
 import { AcademicSessionSetupPage } from './pages/AcademicSessionSetup/AcademicSessionSetupPage';
 import { AcademicParticipantMappingPage } from './pages/AcademicParticipantMapping/AcademicParticipantMappingPage';
+import { AcademicAssessmentPage } from './pages/AcademicAssessment/AcademicAssessmentPage';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -77,6 +78,7 @@ function AppRoutes() {
           }
         />
         <Route path="academic/transcripts/:id/map" element={<AcademicParticipantMappingPage />} />
+        <Route path="academic/transcripts/:id/assessment" element={<AcademicAssessmentPage />} />
         <Route path="kanban" element={<KanbanPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="history" element={<HistoryPage />} />
