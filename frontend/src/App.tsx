@@ -28,6 +28,14 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return isAdmin ? <>{children}</> : <Navigate to="/" />;
 }
 
+function AcademicAdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, isAdmin, isLoading, track } = useAuth();
+  if (isLoading) return null;
+  if (!user) return <Navigate to="/login" />;
+  if (track !== 'academic_gd') return <Navigate to="/" replace />;
+  return isAdmin ? <>{children}</> : <Navigate to="/" replace />;
+}
+
 function AppRoutes() {
   const { user, track } = useAuth();
   return (
@@ -73,14 +81,14 @@ function AppRoutes() {
         <Route
           path="academic/sessions/new"
           element={
-            <AdminRoute>
+            <AcademicAdminRoute>
               <AcademicSessionSetupPage />
-            </AdminRoute>
+            </AcademicAdminRoute>
           }
         />
-        <Route path="academic/transcripts/:id/map" element={<AcademicParticipantMappingPage />} />
-        <Route path="academic/transcripts/:id/assessment" element={<AcademicAssessmentPage />} />
-        <Route path="academic/reports" element={<AcademicReportsPage />} />
+        <Route path="academic/transcripts/:id/map" element={<AcademicAdminRoute><AcademicParticipantMappingPage /></AcademicAdminRoute>} />
+        <Route path="academic/transcripts/:id/assessment" element={<AcademicAdminRoute><AcademicAssessmentPage /></AcademicAdminRoute>} />
+        <Route path="academic/reports" element={<AcademicAdminRoute><AcademicReportsPage /></AcademicAdminRoute>} />
         <Route path="kanban" element={<KanbanPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="history" element={<HistoryPage />} />
