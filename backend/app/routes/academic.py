@@ -178,7 +178,7 @@ def _speaker_names(raw_text: str) -> list[str]:
 
 @router.get("/transcripts/{transcript_id}/context")
 async def get_transcript_context(
-    transcript_id: str, current_user: dict = Depends(get_current_user)
+    transcript_id: str, current_user: dict = Depends(require_admin)
 ):
     from app.db import transcripts_col
 
@@ -303,7 +303,7 @@ async def assess_transcript(
 
 @router.get("/assessments", response_model=list[AcademicAssessmentOut])
 async def list_assessments(
-    transcriptId: str | None = None, current_user: dict = Depends(get_current_user)
+    transcriptId: str | None = None, current_user: dict = Depends(require_admin)
 ):
     query = {"transcriptId": transcriptId} if transcriptId else {}
     return [AcademicAssessmentOut(id=str(doc["_id"]), **{key: value for key, value in doc.items() if key != "_id"}) async for doc in academic_assessments_col.find(query).sort("generatedAt", -1)]
@@ -377,5 +377,5 @@ async def publish_assessment(
 
 
 @router.get("/reports", response_model=list[AcademicReportOut])
-async def list_reports(current_user: dict = Depends(get_current_user)):
+async def list_reports(current_user: dict = Depends(require_admin)):
     return [AcademicReportOut(id=str(doc["_id"]), **{key: value for key, value in doc.items() if key != "_id"}) async for doc in academic_reports_col.find().sort("publishedAt", -1)]
