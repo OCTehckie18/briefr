@@ -84,6 +84,30 @@ The project consists of three primary domains:
 4. **Task Management**: Once confirmed, formal tasks are generated in the system. They populate across the dashboard, Kanban board, and calendar.
 5. **Execution**: Assigned team members can view their specific tasks and update the task status (e.g., from "todo" to "in progress" to "done").
 
+## Industry Meetings Workflow
+
+The industry track supports two ways to create meeting intelligence:
+
+1. **Recorded transcript**: An administrator selects a project, enters a meeting title, and uploads or pastes a `.txt` transcript. Briefr persists the meeting and transcript, then opens the review flow for AI task extraction.
+2. **Scheduled meeting**: An administrator selects a project, adds a Google Meet URL, chooses a date and time, and optionally selects team members. The bot status is persisted and progresses through scheduled, joining, recording, complete, or failed states.
+
+After processing, the resulting tasks are available across the dashboard, Kanban board, calendar, meeting history, and meeting detail view. Task status changes are persisted through the API, and failed reads or updates expose retry and rollback behavior instead of silently losing state.
+
+The meeting history is API-backed and filtered by the active product track. Each meeting can be opened to review its transcript and linked action items. The meeting detail route is `/meetings/:id`.
+
+## Industry Delivery Branches
+
+Industry work is delivered sequentially from `industry-updates`. Each sequence branch is merged back before the next branch is created:
+
+1. `industry-updates-01-transcript-ingestion`
+2. `industry-updates-02-scheduled-meetings`
+3. `industry-updates-03-meeting-archive`
+4. `industry-updates-04-meeting-detail-report`
+5. `industry-updates-05-task-lifecycle`
+6. `industry-updates-06-error-retry-states`
+
+The current integration branch is `industry-updates`.
+
 ## Documentation
 
 For comprehensive technical specifications, database schemas, and future version implementation details, please refer to the files located within the `docs/` directory.
