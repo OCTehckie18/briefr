@@ -46,3 +46,63 @@ export const updateTask = (id: string, data: Partial<TaskPayload>) =>
 export const updateTaskStatus = (id: string, status: string) =>
   api.patch(`/api/tasks/${id}/status`, { status });
 export const deleteTask = (id: string) => api.delete(`/api/tasks/${id}`);
+
+// ── Academic GD ──
+export interface AcademicCohort {
+  id: string;
+  name: string;
+  grade: string;
+  section: string;
+  academicYear: string;
+  description: string;
+}
+
+export interface AcademicStudent {
+  id: string;
+  studentId: string;
+  name: string;
+  email?: string;
+  cohortId: string;
+}
+
+export interface AcademicRubricDimension {
+  key: string;
+  label: string;
+  description: string;
+  maxScore: number;
+}
+
+export interface AcademicRubric {
+  id: string;
+  name: string;
+  description: string;
+  dimensions: AcademicRubricDimension[];
+}
+
+export interface AcademicSession {
+  id: string;
+  title: string;
+  topic: string;
+  cohortId: string;
+  rubricId: string;
+  participantIds: string[];
+  scheduledAt?: string;
+  durationMinutes: number;
+  meetingId?: string;
+  evaluatorId: string;
+  status: 'draft' | 'scheduled' | 'processing' | 'ready_for_review' | 'published';
+}
+
+export const getAcademicCohorts = () => api.get<AcademicCohort[]>('/api/academic/cohorts');
+export const getAcademicStudents = (cohortId?: string) =>
+  api.get<AcademicStudent[]>('/api/academic/students', { params: cohortId ? { cohortId } : undefined });
+export const getAcademicRubrics = () => api.get<AcademicRubric[]>('/api/academic/rubrics');
+export const createAcademicSession = (data: {
+  title: string;
+  topic: string;
+  cohortId: string;
+  rubricId: string;
+  participantIds: string[];
+  scheduledAt?: string;
+  durationMinutes: number;
+}) => api.post<AcademicSession>('/api/academic/sessions', data);
