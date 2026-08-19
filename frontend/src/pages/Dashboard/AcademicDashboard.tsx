@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowUpRight, BookOpenCheck, CheckCircle2, Clock3, FileSearch, GraduationCap, Plus, UsersRound } from 'lucide-react';
 import { useAuth } from '../../store/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const sessions = [
   { title: 'Should AI be used in classrooms?', group: 'Class XI · Section A', status: 'Ready for review', participants: '8 / 8', date: 'Today, 10:30 AM', tone: 'ready' },
@@ -17,6 +18,7 @@ const rubric = [
 
 export const AcademicDashboard: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   return (
     <div className="academic-dashboard">
       <header className="academic-hero">
@@ -25,7 +27,7 @@ export const AcademicDashboard: React.FC = () => {
           <h1>Good morning, {user?.name?.split(' ')[0] || 'Evaluator'}.</h1>
           <p>Turn every group discussion into a fair, reviewable learning outcome.</p>
         </div>
-        <button className="academic-primary-button"><Plus size={17} /> New GD session</button>
+        <button onClick={() => navigate('/academic/sessions/new')} className="academic-primary-button"><Plus size={17} /> New GD session</button>
       </header>
 
       <section className="academic-stat-grid" aria-label="Assessment overview">

@@ -10,6 +10,7 @@ import { CalendarPage } from './pages/Calendar/CalendarPage';
 import { HistoryPage } from './pages/History/HistoryPage';
 import { ScheduleMeetingPage } from './pages/ScheduleMeeting/ScheduleMeetingPage';
 import { TrackSelectionPage } from './pages/TrackSelection/TrackSelectionPage';
+import { AcademicSessionSetupPage } from './pages/AcademicSessionSetup/AcademicSessionSetupPage';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -63,6 +64,14 @@ function AppRoutes() {
           element={
             <AdminRoute>
               <ScheduleMeetingPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="academic/sessions/new"
+          element={
+            <AdminRoute>
+              <AcademicSessionSetupPage />
             </AdminRoute>
           }
         />

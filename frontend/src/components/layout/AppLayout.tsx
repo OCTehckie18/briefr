@@ -22,7 +22,7 @@ export const AppLayout: React.FC = () => {
     ? [
         { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
         ...(isAdmin ? [{ to: '/ingest', label: 'Analyze Recorded GD', icon: FileText, end: false }] : []),
-        ...(isAdmin ? [{ to: '/meetings/schedule', label: 'Schedule GD', icon: Video, end: false }] : []),
+        ...(isAdmin ? [{ to: '/academic/sessions/new', label: 'Schedule GD', icon: Video, end: false }] : []),
         { to: '/calendar', label: 'GD Calendar', icon: CalendarDays, end: false },
         { to: '/history', label: 'Evaluation Sheets', icon: History, end: false },
       ]
