@@ -1,19 +1,31 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getMeetings, getTranscripts, getTasks } from '../../api/endpoints';
+import type { Meeting, Transcript, Task } from '../../api/endpoints';
 import { ChevronDown, ChevronRight, FileText, CheckSquare, Loader2, CalendarDays, Inbox } from 'lucide-react';
+import { useAuth } from '../../store/AuthContext';
 
 export const HistoryPage: React.FC = () => {
-  const [meetings, setMeetings] = useState<any[]>([]);
-  const [transcripts, setTranscripts] = useState<any[]>([]);
-  const [tasks, setTasks] = useState<any[]>([]);
+  const { track } = useAuth();
+  const navigate = useNavigate();
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [transcripts, setTranscripts] = useState<Transcript[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([getMeetings(), getTranscripts(), getTasks()])
-      .then(([mRes, tRes, taskRes]) => { setMeetings(mRes.data); setTranscripts(tRes.data); setTasks(taskRes.data); })
+      .then(([mRes, tRes, taskRes]) => {
+        setMeetings(mRes.data.filter((meeting) => meeting.meetingType === (track || 'industry')));
+        setTranscripts(tRes.data);
+        setTasks(taskRes.data);
+      })
+      .catch(() => setError('Could not load meeting history. Please refresh and try again.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [track, retryAttempt]);
 
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 size={28} className="animate-spin text-cyan-400" /></div>;
 
@@ -21,10 +33,12 @@ export const HistoryPage: React.FC = () => {
     <div className="page-shell space-y-6">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Meeting history</h1>
-          <p className="page-description">Browse past meetings, their source transcripts, and extracted action items.</p>
+          <h1 className="page-title">{track === 'academic_gd' ? 'Evaluation sheets' : 'Meeting history'}</h1>
+          <p className="page-description">{track === 'academic_gd' ? 'Review completed GD assessments, evidence excerpts, score adjustments, and published student reports.' : 'Browse past meetings, their source transcripts, and extracted action items.'}</p>
         </div>
       </div>
+
+      {error && <div className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400"><span>{error}</span><button onClick={() => { setLoading(true); setRetryAttempt((attempt) => attempt + 1); }} className="font-semibold text-red-300 hover:text-white">Retry</button></div>}
 
       <div className="space-y-3">
         {meetings.length === 0 && <div className="ui-card empty-state"><Inbox size={22} /><span>No meetings have been processed yet.</span></div>}
@@ -43,8 +57,10 @@ export const HistoryPage: React.FC = () => {
                   <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500"><CalendarDays size={13} />{new Date(meeting.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {meeting.botStatus && <span className={`hidden rounded-md border px-2 py-1 text-[10px] font-semibold sm:inline-flex ${meeting.botStatus === 'failed' ? 'border-red-500/20 bg-red-500/10 text-red-400' : meeting.botStatus === 'done' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' : 'border-amber-500/20 bg-amber-500/10 text-amber-400'}`}>{meeting.botStatus}</span>}
                   <span className={`hidden items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold sm:flex ${transcript ? 'border-indigo-500/20 bg-indigo-500/10 text-indigo-400' : 'border-white/[0.06] bg-white/[0.03] text-slate-500'}`}><FileText size={12} /> {transcript ? 'Transcript' : 'No transcript'}</span>
                   <span className="flex items-center gap-1 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-400"><CheckSquare size={12} /> {meetingTasks.length} tasks</span>
+                  <span role="link" tabIndex={0} onClick={(event) => { event.stopPropagation(); navigate(`/meetings/${meeting.id}`); }} onKeyDown={(event) => { if (event.key === 'Enter') navigate(`/meetings/${meeting.id}`); }} className="hidden cursor-pointer rounded-md border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[10px] font-semibold text-cyan-400 sm:inline-flex">Open</span>
                 </div>
               </button>
 
@@ -62,7 +78,7 @@ export const HistoryPage: React.FC = () => {
                     <div>
                       <h4 className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-3">Extracted Actions</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {meetingTasks.map((task: any) => (
+                        {meetingTasks.map((task) => (
                           <div key={task.id} className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] flex flex-col gap-2.5">
                             <div className="flex items-start justify-between gap-2">
                               <span className="text-sm font-medium text-slate-200 line-clamp-2 leading-snug">{task.title}</span>

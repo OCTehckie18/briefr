@@ -1,5 +1,5 @@
 /**
- * Briefr Meeting Bot — Playwright Core
+ * Read.ai Meeting Bot — Playwright Core
  * --------------------------------------
  * Joins a Google Meet as "Briefr Bot", captures WebRTC audio in 30-second chunks,
  * sends each chunk to the local Whisper Docker service for transcription,
@@ -21,6 +21,12 @@ import FormData from "form-data";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { fileURLToPath } from "url";
+
+// `import.meta.dirname` is only available in newer Node versions. Keep the
+// bot compatible with the Node >=18 engine declared in package.json.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const MEETING_URL = process.env.MEETING_URL;
 const MEETING_ID = process.env.MEETING_ID;
@@ -28,7 +34,10 @@ const MEETING_DATE = process.env.MEETING_DATE || new Date().toISOString().slice(
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 const BACKEND_TOKEN = process.env.BACKEND_TOKEN || "";
 const WHISPER_URL = process.env.WHISPER_URL || "http://localhost:9000";
-const BOT_NAME = "Briefr Bot";
+// Guest mode is the default. Set BOT_USE_GOOGLE_AUTH=true only when the
+// meeting requires a signed-in Google account and auth.json is authorized.
+const BOT_NAME = process.env.BOT_NAME || "Briefr Bot";
+const BOT_USE_GOOGLE_AUTH = process.env.BOT_USE_GOOGLE_AUTH === "true";
 const MAX_DURATION_MS = parseInt(process.env.BOT_MAX_DURATION_MINUTES || "120", 10) * 60 * 1000;
 const CHUNK_DURATION_MS = 30_000; // 30 seconds per audio chunk
 
@@ -45,7 +54,7 @@ function log(msg) {
 
 async function updateBotStatus(status) {
   try {
-    await fetch(`${BACKEND_URL}/api/meetings/${MEETING_ID}/bot-status`, {
+    const res = await fetch(`${BACKEND_URL}/api/meetings/${MEETING_ID}/bot-status`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -53,6 +62,12 @@ async function updateBotStatus(status) {
       },
       body: JSON.stringify({ status }),
     });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`HTTP ${res.status} — ${body}`);
+    }
+
     log(`Bot status → ${status}`);
   } catch (e) {
     log(`Failed to update status to ${status}: ${e.message}`);
@@ -61,12 +76,12 @@ async function updateBotStatus(status) {
 
 /**
  * Send a webm/opus buffer to the local Whisper service for transcription.
- * Returns the transcript text string, or "" on failure.
+ * Returns the Whisper result, including timestamps, or an empty result.
  */
 async function transcribeChunk(audioBuffer, chunkIndex) {
   if (audioBuffer.length < MIN_CHUNK_BYTES) {
     log(`Chunk ${chunkIndex} too small (${audioBuffer.length} bytes) — skipping (no real audio).`);
-    return "";
+    return { text: "", segments: [] };
   }
 
   // Save as .webm (the actual format from MediaRecorder)
@@ -90,16 +105,19 @@ async function transcribeChunk(audioBuffer, chunkIndex) {
     if (!res.ok) {
       const errBody = await res.text();
       log(`Whisper error on chunk ${chunkIndex}: HTTP ${res.status} — ${errBody}`);
-      return "";
+      return { text: "", segments: [] };
     }
 
     const data = await res.json();
     const preview = (data.text || "").slice(0, 100);
     log(`Chunk ${chunkIndex}: "${preview}${preview.length === 100 ? "…" : ""}"`);
-    return data.text || "";
+    return {
+      text: data.text || "",
+      segments: Array.isArray(data.segments) ? data.segments : [],
+    };
   } catch (e) {
     log(`Whisper request failed for chunk ${chunkIndex}: ${e.message}`);
-    return "";
+    return { text: "", segments: [] };
   } finally {
     try { fs.unlinkSync(tmpPath); } catch {}
   }
@@ -108,7 +126,7 @@ async function transcribeChunk(audioBuffer, chunkIndex) {
 /**
  * Ship the final assembled transcript to the Briefr backend.
  */
-async function sendTranscriptToBackend(fullTranscript) {
+async function sendTranscriptToBackend(fullTranscript, segments) {
   log(`Sending transcript (${fullTranscript.length} chars) to backend...`);
   try {
     const res = await fetch(`${BACKEND_URL}/api/bot/transcript-ready`, {
@@ -120,6 +138,10 @@ async function sendTranscriptToBackend(fullTranscript) {
       body: JSON.stringify({
         meetingId: MEETING_ID,
         transcript: fullTranscript,
+        // Keep the timestamped chunks. Speaker is intentionally null until a
+        // diarization/voice-identity step assigns it; guessing from wording
+        // produces incorrect names.
+        segments,
         meeting_date: MEETING_DATE,
       }),
     });
@@ -165,9 +187,10 @@ async function run() {
     permissions: ["microphone", "camera"],
     userAgent:
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    // Load saved Google session if available (see bot/README-auth.md)
-    ...(fs.existsSync(path.join(import.meta.dirname, "auth.json"))
-      ? { storageState: path.join(import.meta.dirname, "auth.json") }
+    // Only load a saved Google session when explicitly enabled. Otherwise the
+    // bot uses Meet's guest flow and enters as BOT_NAME.
+    ...(BOT_USE_GOOGLE_AUTH && fs.existsSync(path.join(__dirname, "auth.json"))
+      ? { storageState: path.join(__dirname, "auth.json") }
       : {}),
   });
 
@@ -242,13 +265,34 @@ async function run() {
 
   // Track collected audio chunk texts
   const audioChunks = [];
+  const transcriptSegments = [];
+  // Keep every in-flight Whisper request alive until it has completed. The
+  // Whisper service can take longer than the final recorder flush delay.
+  const pendingTranscriptions = new Set();
   let chunkIndex = 0;
 
   // Expose a function the in-page recorder calls to deliver each audio blob
   await page.exposeFunction("__briefrAudioChunk__", async (base64Audio) => {
-    const buf = Buffer.from(base64Audio, "base64");
-    const text = await transcribeChunk(buf, chunkIndex++);
-    if (text.trim()) audioChunks.push(text.trim());
+    const transcription = (async () => {
+      const buf = Buffer.from(base64Audio, "base64");
+      const currentChunk = chunkIndex++;
+      const result = await transcribeChunk(buf, currentChunk);
+      if (result.text.trim()) audioChunks[currentChunk] = result.text.trim();
+      for (const segment of result.segments) {
+        transcriptSegments.push({
+          ...segment,
+          chunkIndex: currentChunk,
+          speaker: segment.speaker || null,
+        });
+      }
+    })();
+
+    pendingTranscriptions.add(transcription);
+    try {
+      await transcription;
+    } finally {
+      pendingTranscriptions.delete(transcription);
+    }
   });
 
   try {
@@ -409,6 +453,8 @@ async function run() {
       recorder.onstop = async () => {
         if (chunks.length === 0) {
           console.log("[Briefr] Recorder stopped with 0 chunks.");
+          window.__briefrRecorderDone__?.();
+          window.__briefrRecorderDone__ = null;
           return;
         }
         const blob = new Blob(chunks, { type: recorder.mimeType });
@@ -423,8 +469,12 @@ async function run() {
           binary += String.fromCharCode(...uint8.subarray(i, i + 8192));
         }
         const base64 = btoa(binary);
-        window.__briefrAudioChunk__(base64);
+        // Await the exposed Node callback so the final page evaluation can
+        // observe that the chunk has been handed off to Whisper.
+        await window.__briefrAudioChunk__(base64);
         chunks = [];
+        window.__briefrRecorderDone__?.();
+        window.__briefrRecorderDone__ = null;
       };
 
       recorder.start();
@@ -454,15 +504,27 @@ async function run() {
     log(`Meeting session over: ${reason}`);
 
     // Stop recorder and flush last chunk
-    await page.evaluate(() => {
+    await page.evaluate(() => new Promise((resolve) => {
       clearInterval(window.__briefrChunkTimer__);
+      window.__briefrRecorderDone__ = resolve;
       if (window.__briefrRecorder__?.state === "recording") {
         window.__briefrRecorder__.stop();
+      } else {
+        resolve();
       }
-    }).catch(() => {});
+    })).catch(() => {});
 
-    // Wait for last chunk callback to finish
-    await new Promise((r) => setTimeout(r, 6_000));
+    // Wait for the final MediaRecorder callback and every Whisper request.
+    // A fixed delay was unreliable because faster-whisper can take longer
+    // than six seconds, especially on CPU.
+    const flushDeadline = Date.now() + 120_000;
+    while (pendingTranscriptions.size > 0 && Date.now() < flushDeadline) {
+      await Promise.all([...pendingTranscriptions]);
+    }
+
+    if (pendingTranscriptions.size > 0) {
+      log(`Timed out waiting for ${pendingTranscriptions.size} Whisper request(s).`);
+    }
 
   } catch (err) {
     log(`Error during meeting: ${err.message}`);
@@ -473,11 +535,12 @@ async function run() {
   }
 
   // ── 8. Assemble and ship transcript ────────────────────────────────────
-  const fullTranscript = audioChunks.join(" ").trim();
+  const fullTranscript = audioChunks.filter(Boolean).join(" ").trim();
+  transcriptSegments.sort((a, b) => a.chunkIndex - b.chunkIndex || a.start - b.start);
   log(`Total chunks: ${audioChunks.length}, transcript length: ${fullTranscript.length} chars.`);
 
   if (fullTranscript.length > 0) {
-    await sendTranscriptToBackend(fullTranscript);
+    await sendTranscriptToBackend(fullTranscript, transcriptSegments);
     await updateBotStatus("done");
   } else {
     log("No transcript captured — nothing to send.");

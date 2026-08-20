@@ -1,17 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { getTasks } from '../../api/endpoints';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
+import { getAcademicSessions, getTasks } from '../../api/endpoints';
+import type { AcademicSession } from '../../api/endpoints';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Loader2, Plus } from 'lucide-react';
+import { useAuth } from '../../store/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, addMonths, subMonths, format, isSameMonth, isSameDay, isToday } from 'date-fns';
 
 interface Task { id: string; title: string; deadline?: string; priority: string; status: string; assignedTo?: { name: string }; }
 
 export const CalendarPage: React.FC = () => {
+  const { track } = useAuth();
+  const isAcademic = track === 'academic_gd';
   const [tasks, setTasks] = useState<Task[]>([]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { getTasks().then((res) => setTasks(res.data)).finally(() => setLoading(false)); }, []);
+  useEffect(() => { if (isAcademic) { setLoading(false); return; } getTasks().then((res) => setTasks(res.data)).finally(() => setLoading(false)); }, [isAcademic]);
 
   const getTasksForDate = (date: Date) => tasks.filter((t) => t.deadline && isSameDay(new Date(t.deadline), date));
 
@@ -65,6 +70,7 @@ export const CalendarPage: React.FC = () => {
   const selectedTasks = selectedDate ? getTasksForDate(selectedDate) : [];
 
   if (loading) return <div className="flex items-center justify-center py-20"><Loader2 size={28} className="animate-spin text-cyan-400" /></div>;
+  if (isAcademic) return <AcademicCalendar />;
 
   return (
     <div className="page-shell flex h-full flex-col space-y-6">
@@ -130,4 +136,20 @@ export const CalendarPage: React.FC = () => {
       </div>
     </div>
   );
+};
+
+const AcademicCalendar: React.FC = () => {
+  const navigate = useNavigate();
+  const [sessions, setSessions] = useState<AcademicSession[]>([]);
+  const [month, setMonth] = useState(new Date());
+  const [selected, setSelected] = useState<Date | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { getAcademicSessions().then((response) => setSessions(response.data)).finally(() => setLoading(false)); }, []);
+  const onDate = (date: Date) => sessions.filter((session) => session.scheduledAt && isSameDay(new Date(session.scheduledAt), date));
+  const start = startOfWeek(startOfMonth(month));
+  const end = endOfWeek(endOfMonth(month));
+  const days: Date[] = []; let cursor = start; while (cursor <= end) { days.push(cursor); cursor = addDays(cursor, 1); }
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 size={28} className="animate-spin text-indigo-500" /></div>;
+  const selectedSessions = selected ? onDate(selected) : [];
+  return <div className="page-shell flex h-full flex-col space-y-6"><div className="page-header"><div><h1 className="page-title">GD calendar</h1><p className="page-description">View group discussions by cohort, topic, evaluator, and scheduled time.</p></div><button onClick={() => navigate('/academic/sessions/new')} className="academic-primary-button"><Plus size={16} /> Add GD event</button></div><div className="flex min-h-[550px] flex-1 flex-col gap-5 xl:flex-row"><div className="ui-card flex flex-1 flex-col overflow-hidden"><div className="flex items-center justify-between border-b border-slate-200 px-5 py-4"><h2 className="flex items-center gap-2 text-base font-semibold text-slate-800"><CalendarIcon size={18} className="text-indigo-500" />{format(month, 'MMMM yyyy')}</h2><div className="flex items-center gap-1 rounded-lg border border-slate-200 p-0.5"><button onClick={() => setMonth(subMonths(month, 1))} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100"><ChevronLeft size={16} /></button><button onClick={() => setMonth(new Date())} className="rounded-md px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-100">Today</button><button onClick={() => setMonth(addMonths(month, 1))} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100"><ChevronRight size={16} /></button></div></div><div className="grid grid-cols-7 border-b border-slate-100">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((day) => <div key={day} className="py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400">{day}</div>)}</div><div className="grid flex-1 grid-cols-7">{days.map((day) => { const daySessions = onDate(day); return <button key={day.toISOString()} onClick={() => setSelected(day)} className={`min-h-24 border-b border-r border-slate-100 p-2 text-left align-top ${!isSameMonth(day, month) ? 'bg-slate-50 text-slate-300' : 'text-slate-700'} ${selected && isSameDay(day, selected) ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}><span className={`inline-flex h-6 w-6 items-center justify-center rounded-md text-[11px] font-semibold ${isToday(day) ? 'bg-indigo-600 text-white' : ''}`}>{format(day, 'd')}</span><div className="mt-2 space-y-1">{daySessions.slice(0, 2).map((session) => <div key={session.id} className="truncate rounded border border-indigo-100 bg-indigo-50 px-1.5 py-1 text-[9px] font-medium text-indigo-700">{session.title}</div>)}{daySessions.length > 2 && <div className="text-[9px] text-slate-400">+{daySessions.length - 2} more</div>}</div></button>; })}</div></div><aside className="ui-card flex w-full shrink-0 flex-col overflow-hidden xl:w-80"><div className="border-b border-slate-200 px-5 py-4"><h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{selected ? format(selected, 'MMMM d, yyyy') : 'Select a date'}</h3></div><div className="flex-1 space-y-3 overflow-y-auto p-4">{!selected ? <p className="mt-10 text-center text-sm text-slate-500">Click a date to view GD sessions.</p> : !selectedSessions.length ? <p className="mt-10 text-center text-sm text-slate-500">No GD sessions scheduled.</p> : selectedSessions.map((session) => <div key={session.id} className="rounded-xl border border-slate-200 p-3.5"><h4 className="text-sm font-semibold text-slate-700">{session.title}</h4><p className="mt-1 text-xs text-slate-500">{session.topic}</p><div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-xs text-slate-400"><span>{session.participantIds.length} participants</span><span>{session.durationMinutes} min</span></div></div>)}</div></aside></div></div>;
 };

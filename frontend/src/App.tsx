@@ -9,6 +9,12 @@ import { KanbanPage } from './pages/Kanban/KanbanPage';
 import { CalendarPage } from './pages/Calendar/CalendarPage';
 import { HistoryPage } from './pages/History/HistoryPage';
 import { ScheduleMeetingPage } from './pages/ScheduleMeeting/ScheduleMeetingPage';
+import { TrackSelectionPage } from './pages/TrackSelection/TrackSelectionPage';
+import { AcademicSessionSetupPage } from './pages/AcademicSessionSetup/AcademicSessionSetupPage';
+import { AcademicParticipantMappingPage } from './pages/AcademicParticipantMapping/AcademicParticipantMappingPage';
+import { AcademicAssessmentPage } from './pages/AcademicAssessment/AcademicAssessmentPage';
+import { AcademicReportsPage } from './pages/AcademicReports/AcademicReportsPage';
+import { MeetingReport } from './pages/MeetingReport/MeetingReport';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -23,16 +29,28 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return isAdmin ? <>{children}</> : <Navigate to="/" />;
 }
 
+function AcademicAdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, isAdmin, isLoading, track } = useAuth();
+  if (isLoading) return null;
+  if (!user) return <Navigate to="/login" />;
+  if (track !== 'academic_gd') return <Navigate to="/" replace />;
+  return isAdmin ? <>{children}</> : <Navigate to="/" replace />;
+}
+
 function AppRoutes() {
-  const { user } = useAuth();
+  const { user, track } = useAuth();
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage />} />
+      <Route
+        path="/login"
+        element={user ? <Navigate to="/" /> : track ? <LoginPage /> : <Navigate to="/select-track" replace />}
+      />
+      <Route path="/select-track" element={<TrackSelectionPage />} />
       <Route
         path="/"
         element={
           <PrivateRoute>
-            <AppLayout />
+            {track ? <AppLayout /> : <Navigate to="/select-track" replace />}
           </PrivateRoute>
         }
       >
@@ -61,9 +79,21 @@ function AppRoutes() {
             </AdminRoute>
           }
         />
+        <Route
+          path="academic/sessions/new"
+          element={
+            <AcademicAdminRoute>
+              <AcademicSessionSetupPage />
+            </AcademicAdminRoute>
+          }
+        />
+        <Route path="academic/transcripts/:id/map" element={<AcademicAdminRoute><AcademicParticipantMappingPage /></AcademicAdminRoute>} />
+        <Route path="academic/transcripts/:id/assessment" element={<AcademicAdminRoute><AcademicAssessmentPage /></AcademicAdminRoute>} />
+        <Route path="academic/reports" element={<AcademicAdminRoute><AcademicReportsPage /></AcademicAdminRoute>} />
         <Route path="kanban" element={<KanbanPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="history" element={<HistoryPage />} />
+        <Route path="meetings/:id" element={<MeetingReport />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

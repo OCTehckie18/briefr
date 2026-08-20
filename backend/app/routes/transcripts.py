@@ -15,6 +15,7 @@ def _transcript_out(t: dict, include_raw: bool = True) -> TranscriptOut:
         id=str(t["_id"]),
         meetingId=t["meetingId"],
         rawText=t.get("rawText", "") if include_raw else "",
+        segments=t.get("segments", []),
         extractedTasks=t.get("extractedTasks", []),
         structuredExtraction=t.get("structuredExtraction"),
         createdAt=t.get("createdAt", datetime.now(timezone.utc)),
@@ -29,6 +30,7 @@ async def create_transcript(
     transcript_doc = {
         "meetingId": data.meetingId,
         "rawText": data.rawText,
+        "segments": data.segments,
         "extractedTasks": [],
         "structuredExtraction": None,
         "createdAt": datetime.now(timezone.utc),

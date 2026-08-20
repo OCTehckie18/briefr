@@ -29,11 +29,11 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#050510] p-4 sm:p-6">
-      <div className="grid w-full max-w-[1600px] overflow-hidden rounded-[28px] border border-white/10 bg-slate-950/70 shadow-2xl shadow-black/40 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="flex min-h-[600px] flex-col justify-between bg-gradient-to-br from-indigo-500/20 via-cyan-500/10 to-transparent p-10 sm:p-14">
+    <div className="flex min-h-screen items-center justify-center bg-[#080b12] p-4 sm:p-6">
+      <div className="grid w-full max-w-[1200px] overflow-hidden rounded-xl border border-slate-800 bg-[#0d111a] shadow-2xl shadow-black/30 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="flex min-h-[560px] flex-col justify-between border-b border-slate-800 bg-[#111827] p-10 sm:p-14 lg:border-b-0 lg:border-r">
           <div>
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-400 text-xl font-semibold text-white shadow-lg shadow-cyan-500/20">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-lg bg-cyan-500 text-xl font-semibold text-slate-950">
               B
             </div>
 

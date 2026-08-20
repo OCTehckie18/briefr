@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Literal
 from datetime import datetime
 
 
@@ -9,6 +9,7 @@ class MeetingCreate(BaseModel):
     memberIds: List[str] = []
     scheduledAt: Optional[datetime] = None
     meetingLink: Optional[str] = None  # Google Meet URL for bot auto-join
+    meetingType: Literal["academic_gd", "industry"] = "industry"
 
 
 class MeetingOut(BaseModel):
@@ -21,3 +22,4 @@ class MeetingOut(BaseModel):
     createdAt: datetime
     meetingLink: Optional[str] = None
     botStatus: Optional[str] = None  # pending | joining | recording | done | failed
+    meetingType: Literal["academic_gd", "industry"] = "industry"

@@ -16,7 +16,11 @@ class Settings(BaseSettings):
 
     # LLM — Groq
     LLM_API_KEY: str = ""
-    LLM_MODEL: str = "llama-3.3-70b-versatile"
+    # Groq deprecated llama-3.3-70b-versatile in August 2026.
+    LLM_MODEL: str = "openai/gpt-oss-120b"
+    LLM_FALLBACK_MODEL: str = "openai/gpt-oss-120b"
+    ACADEMIC_LLM_MODEL: str = "qwen/qwen3.6-27b"
+    ACADEMIC_LLM_MAX_TOKENS: int = 3000
 
     # Email / SMTP
     SMTP_HOST: str = "smtp.gmail.com"
@@ -26,6 +30,12 @@ class Settings(BaseSettings):
 
     # Frontend URL (for CORS)
     FRONTEND_URL: str = "http://localhost:5173"
+
+    # Internal meeting bot service URLs
+    BOT_SERVICE_URL: str = "http://localhost:3001"
+    BACKEND_SERVICE_URL: str = "http://localhost:8000"
+    BOT_TOKEN_TTL_MINUTES: int = 180
+    BOT_LOOKBACK_MINUTES: int = 15
 
     class Config:
         env_file = ".env"

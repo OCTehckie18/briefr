@@ -17,7 +17,8 @@ from datetime import datetime, timezone
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Any
 
 from app.db import meetings_col, transcripts_col
 from app.dependencies import get_current_user
@@ -30,6 +31,7 @@ class TranscriptReadyPayload(BaseModel):
     meetingId: str
     transcript: str
     meeting_date: str  # YYYY-MM-DD — used as the anchor date for LLM deadline parsing
+    segments: list[dict[str, Any]] = Field(default_factory=list)
 
 
 @router.post("/transcript-ready")
@@ -63,6 +65,9 @@ async def transcript_ready(
     transcript_doc = {
         "meetingId": meeting_id,
         "rawText": raw_text,
+        # Timestamped Whisper output is retained separately from rawText so a
+        # diarization pass can attach speaker/speakerId without reparsing text.
+        "segments": payload.segments,
         "extractedTasks": [],
         "structuredExtraction": None,
         "createdAt": datetime.now(timezone.utc),

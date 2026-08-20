@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install system dependencies for faster-whisper (needs ffmpeg for audio decoding)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
+    ffmpeg curl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir faster-whisper flask

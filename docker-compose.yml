@@ -1,23 +1,57 @@
-version: "3.9"
-
 services:
-  # ── Whisper STT Service ──────────────────────────────────────────────────
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      FRONTEND_URL: http://localhost:5173
+      BOT_SERVICE_URL: http://bot:3001
+      BACKEND_SERVICE_URL: http://backend:8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      whisper:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+  bot:
+    build: ./bot
+    env_file:
+      - ./bot/.env
+    environment:
+      BACKEND_URL: http://backend:8000
+      WHISPER_URL: http://whisper:9000
+    ports:
+      - "3001:3001"
+    depends_on:
+      backend:
+        condition: service_started
+      whisper:
+        condition: service_healthy
+
   whisper:
     build:
       context: ./whisper-service
       dockerfile: Dockerfile
-    container_name: briefr-whisper
-    ports:
-      - "9000:9000"
     environment:
-      # Options: tiny (~75MB), base (~145MB), small (~465MB), medium (~1.5GB)
       WHISPER_MODEL: base
       WHISPER_DEVICE: cpu
       WHISPER_COMPUTE_TYPE: int8
-    restart: unless-stopped
+    ports:
+      - "9000:9000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s  # Give the model time to download/load on first start
+      # The base model can take several minutes to download/load on first run.
+      start_period: 5m

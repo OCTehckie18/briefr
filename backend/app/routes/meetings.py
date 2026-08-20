@@ -24,6 +24,7 @@ def _meeting_out(m: dict) -> MeetingOut:
         createdAt=m.get("createdAt", datetime.now(timezone.utc)),
         meetingLink=m.get("meetingLink"),
         botStatus=m.get("botStatus"),
+        meetingType=m.get("meetingType", "industry"),
     )
 
 
@@ -42,6 +43,7 @@ async def create_meeting(
         "meetingLink": data.meetingLink,
         # Automatically set botStatus to "pending" when a meetingLink is provided
         "botStatus": "pending" if data.meetingLink else None,
+        "meetingType": data.meetingType,
     }
     result = await meetings_col.insert_one(meeting_doc)
     meeting_doc["_id"] = result.inserted_id

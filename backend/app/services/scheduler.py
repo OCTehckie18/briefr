@@ -2,11 +2,12 @@
 Briefr Meeting Bot Scheduler
 ------------------------------
 Uses APScheduler to poll the meetings collection every 60 seconds for upcoming
-bot-enabled meetings and dispatches them to the Node.js bot microservice.
+or recently missed bot-enabled meetings and dispatches them to the Node.js bot
+microservice.
 
 A meeting is dispatched when:
   - meetingLink is set (non-null)
-  - scheduledAt is within the next 5 minutes
+  - scheduledAt is within the next 5 minutes or the recent overdue grace window
   - botStatus is "pending" (not yet picked up)
 """
 
@@ -17,11 +18,11 @@ import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.config import settings
-from app.db import meetings_col
+from app.db import meetings_col, users_col
+from app.services.auth import create_access_token
 
 log = logging.getLogger(__name__)
 
-BOT_SERVICE_URL = "http://localhost:3001"
 LOOKAHEAD_MINUTES = 5  # Dispatch bot this many minutes before scheduledAt
 
 _scheduler: AsyncIOScheduler | None = None
@@ -30,11 +31,12 @@ _scheduler: AsyncIOScheduler | None = None
 async def _poll_and_dispatch():
     """Check for meetings due within the next LOOKAHEAD_MINUTES and launch the bot."""
     now = datetime.now(timezone.utc)
+    window_start = now - timedelta(minutes=settings.BOT_LOOKBACK_MINUTES)
     window_end = now + timedelta(minutes=LOOKAHEAD_MINUTES)
 
     query = {
         "meetingLink": {"$ne": None, "$exists": True},
-        "scheduledAt": {"$gte": now, "$lte": window_end},
+        "scheduledAt": {"$gte": window_start, "$lte": window_end},
         "botStatus": "pending",
     }
 
@@ -50,6 +52,24 @@ async def _poll_and_dispatch():
 
         log.info(f"[Scheduler] Dispatching bot for meeting {meeting_id} at {meeting_url}")
 
+        # The bot calls authenticated backend endpoints when it updates status
+        # and submits the final transcript. Mint a token for an existing admin
+        # user instead of starting the bot with an empty Authorization header.
+        admin = await users_col.find_one({"role": "admin"})
+        if not admin:
+            log.error("[Scheduler] Cannot start bot: no admin user exists")
+            await meetings_col.update_one(
+                {"_id": meeting["_id"]},
+                {"$set": {"botStatus": "failed"}},
+            )
+            continue
+
+        backend_token = create_access_token(
+            str(admin["_id"]),
+            admin.get("role", "admin"),
+            expires_minutes=settings.BOT_TOKEN_TTL_MINUTES,
+        )
+
         # Mark as joining immediately to prevent duplicate dispatches
         await meetings_col.update_one(
             {"_id": meeting["_id"]},
@@ -61,13 +81,13 @@ async def _poll_and_dispatch():
             # The bot will use this token when calling /api/bot/transcript-ready
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.post(
-                    f"{BOT_SERVICE_URL}/start-bot",
+                    f"{settings.BOT_SERVICE_URL}/start-bot",
                     json={
                         "meetingUrl": meeting_url,
                         "meetingId": meeting_id,
                         "meetingDate": meeting_date,
-                        "backendUrl": f"http://localhost:8000",
-                        "backendToken": "",  # Bot uses internal auth; update if needed
+                        "backendUrl": settings.BACKEND_SERVICE_URL,
+                        "backendToken": backend_token,
                     },
                 )
                 if resp.status_code == 200:
@@ -85,7 +105,7 @@ async def _poll_and_dispatch():
 
         except httpx.ConnectError:
             log.error(
-                f"[Scheduler] Bot service not reachable at {BOT_SERVICE_URL}. "
+                f"[Scheduler] Bot service not reachable at {settings.BOT_SERVICE_URL}. "
                 f"Is 'node bot/server.js' running?"
             )
             await meetings_col.update_one(

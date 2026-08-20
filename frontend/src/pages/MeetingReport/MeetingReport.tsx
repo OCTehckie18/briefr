@@ -1,325 +1,96 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { 
-  ChevronLeft, 
-  Search, 
-  Clock, 
-  Video 
-} from 'lucide-react';
-import { 
-  PieChart, 
-  Pie, 
-  Cell, 
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip
-} from 'recharts';
-import { Card, CardHeader } from '../../components/ui/Card';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { AlertCircle, ArrowLeft, CheckCircle2, Clock, FileText, Loader2, Search } from 'lucide-react';
+import { getMeeting, getTasks, getTranscripts, updateTaskStatus } from '../../api/endpoints';
+import type { Meeting, Task, Transcript } from '../../api/endpoints';
 import { Badge } from '../../components/ui/Badge';
-import { Tabs } from '../../components/ui/Tabs';
-import { mockMeetings } from '../../data/mockMeetings';
-import type { ActionItem } from '../../data/mockMeetings';
 import './MeetingReport.css';
+
+const statusLabel: Record<string, string> = { pending: 'Scheduled', joining: 'Bot joining', recording: 'Recording', done: 'Complete', failed: 'Failed' };
+const taskStatusClass: Record<string, string> = { todo: 'border-white/[0.06] bg-white/[0.04] text-slate-400', in_progress: 'border-amber-500/20 bg-amber-500/10 text-amber-400', done: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-400' };
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const MeetingReport: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  
-  // Find specific meeting
-  const currentMeeting = mockMeetings.find(m => m.id === id);
+  const [meeting, setMeeting] = useState<Meeting | null>(null);
+  const [transcript, setTranscript] = useState<Transcript | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const [updatingTask, setUpdatingTask] = useState<string | null>(null);
 
-  if (!currentMeeting) {
-    return (
-      <div style={{ textAlign: 'center', padding: '40px' }}>
-        <h2>Meeting not found</h2>
-        <button onClick={() => navigate('/')} style={{ marginTop: '16px' }}>Back to Dashboard</button>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!id) return;
+    Promise.all([getMeeting(id), getTranscripts(), getTasks()])
+      .then(([meetingRes, transcriptRes, taskRes]) => {
+        const currentMeeting = meetingRes.data;
+        const currentTranscript = transcriptRes.data.find((item) => item.meetingId === currentMeeting.id) || null;
+        setMeeting(currentMeeting);
+        setTranscript(currentTranscript);
+        setTasks(taskRes.data.filter((task) => task.projectId === currentMeeting.projectId || task.transcriptId === currentTranscript?.id));
+      })
+      .catch((err: any) => setError(err.response?.data?.detail || 'Could not load this meeting.'))
+      .finally(() => setLoading(false));
+  }, [id, retryAttempt]);
 
-  // Manage Action Items state locally for interactive checkboxes
-  const [actionItems, setActionItems] = useState<ActionItem[]>(currentMeeting.actionItems);
-  const [searchText, setSearchText] = useState('');
-
-  const handleToggleAction = (actionId: string) => {
-    setActionItems(prev => 
-      prev.map(item => item.id === actionId ? { ...item, completed: !item.completed } : item)
-    );
+  const retry = () => {
+    setLoading(true);
+    setError('');
+    setRetryAttempt((attempt) => attempt + 1);
   };
 
-  // Helper to highlight search matches in transcript text
-  const highlightText = (text: string, search: string) => {
-    if (!search.trim()) return text;
-    const parts = text.split(new RegExp(`(${search})`, 'gi'));
-    return (
-      <>
-        {parts.map((part, index) => 
-          part.toLowerCase() === search.toLowerCase() 
-            ? <mark key={index}>{part}</mark> 
-            : part
-        )}
-      </>
-    );
-  };
+  const transcriptParts = useMemo(() => {
+    const text = transcript?.rawText || '';
+    if (!search.trim()) return [text];
+    return text.split(new RegExp(`(${escapeRegExp(search)})`, 'gi'));
+  }, [transcript, search]);
 
-  // Define Speaker coloring map based on mock data colors
-  const getSpeakerColor = (speakerName: string) => {
-    const speakerData = currentMeeting.talkTime.find(s => s.name === speakerName);
-    return speakerData ? speakerData.color : 'var(--text-secondary)';
-  };
-
-  // Sub-tabs contents
-  const leftTabs = [
-    {
-      id: 'summary',
-      label: 'AI Summary',
-      content: (
-        <Card>
-          <p style={{ lineHeight: 1.6, fontSize: '0.95rem' }}>{currentMeeting.summary}</p>
-        </Card>
-      )
-    },
-    {
-      id: 'actions',
-      label: `Action Items (${actionItems.filter(a => !a.completed).length})`,
-      content: (
-        <div className="action-items-list">
-          {actionItems.length > 0 ? (
-            actionItems.map(item => (
-              <div key={item.id} className={`action-item-row ${item.completed ? 'completed' : ''}`}>
-                <input 
-                  type="checkbox" 
-                  checked={item.completed} 
-                  onChange={() => handleToggleAction(item.id)}
-                  className="action-checkbox"
-                />
-                <div className="action-content">
-                  <span className="action-text">{item.text}</span>
-                  <div className="action-meta">
-                    <span className="action-assignee">Assignee: {item.assignee}</span>
-                    <Badge variant={item.completed ? 'success' : 'warning'}>
-                      {item.completed ? 'Completed' : 'Pending'}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-            ))
-          ) : (
-            <p style={{ color: 'var(--text-muted)' }}>No action items specified.</p>
-          )}
-        </div>
-      )
-    },
-    {
-      id: 'questions',
-      label: 'Key Questions',
-      content: (
-        <div className="questions-list">
-          {currentMeeting.keyQuestions.length > 0 ? (
-            currentMeeting.keyQuestions.map((q, idx) => (
-              <div key={idx} className="question-card">
-                {q}
-              </div>
-            ))
-          ) : (
-            <p style={{ color: 'var(--text-muted)' }}>No key questions detected.</p>
-          )}
-        </div>
-      )
+  const changeTaskStatus = async (task: Task, status: Task['status']) => {
+    setUpdatingTask(task.id);
+    try {
+      const response = await updateTaskStatus(task.id, status);
+      setTasks((current) => current.map((item) => item.id === task.id ? response.data : item));
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Could not update task status.');
+    } finally {
+      setUpdatingTask(null);
     }
-  ];
+  };
 
-  const rightTabs = [
-    {
-      id: 'transcript',
-      label: 'Transcript',
-      content: (
-        <Card className="transcript-card" padding="none">
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--card-border)' }} className="transcript-header">
-            <div className="transcript-search">
-              <Search size={16} className="text-muted" />
-              <input 
-                type="text" 
-                placeholder="Search transcript..." 
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-              />
-            </div>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              {currentMeeting.transcript.length} phrases
-            </span>
-          </div>
-
-          <div style={{ padding: '20px' }} className="transcript-scroll-area">
-            {currentMeeting.transcript.length > 0 ? (
-              currentMeeting.transcript.map((seg, index) => (
-                <div key={index} className="transcript-segment">
-                  <div className="segment-meta">
-                    <span className="speaker-badge" style={{ color: getSpeakerColor(seg.speaker) }}>
-                      {seg.speaker}
-                    </span>
-                    <span className="segment-time">{seg.timestamp}</span>
-                  </div>
-                  <p className="segment-text">
-                    {highlightText(seg.text, searchText)}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <p style={{ color: 'var(--text-muted)' }}>No transcript data.</p>
-            )}
-          </div>
-        </Card>
-      )
-    },
-    {
-      id: 'analytics',
-      label: 'Meeting Analytics',
-      content: (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Talk Time Share */}
-          <Card>
-            <CardHeader title="Speaker Talk-Time" subtitle="Percentage share of vocal activity" />
-            <div className="donut-chart-container">
-              <div style={{ width: '130px', height: '130px' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={currentMeeting.talkTime}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={45}
-                      outerRadius={60}
-                      paddingAngle={2}
-                      dataKey="percentage"
-                    >
-                      {currentMeeting.talkTime.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="donut-legend">
-                {currentMeeting.talkTime.map((speaker, index) => (
-                  <div key={index} className="legend-item">
-                    <div className="legend-left">
-                      <div className="legend-color-dot" style={{ backgroundColor: speaker.color }} />
-                      <span className="legend-name">{speaker.name}</span>
-                    </div>
-                    <span className="legend-percent">{speaker.percentage}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
-
-          {/* Sentiment Timeline */}
-          <Card>
-            <CardHeader title="Engagement Timeline" subtitle="Fluctuations in engagement levels" />
-            <div style={{ height: '180px', width: '100%', marginTop: '10px' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={currentMeeting.engagementTrend} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--card-border)" />
-                  <XAxis dataKey="time" stroke="var(--text-muted)" fontSize={10} tickLine={false} />
-                  <YAxis stroke="var(--text-muted)" fontSize={10} tickLine={false} domain={[0, 100]} />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'var(--bg-secondary)', 
-                      borderColor: 'var(--card-border)', 
-                      color: 'var(--text-primary)',
-                      borderRadius: 'var(--border-radius-md)'
-                    }} 
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="engagement" 
-                    stroke="var(--primary)" 
-                    strokeWidth={2}
-                    dot={false}
-                    name="Engagement"
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="sentiment" 
-                    stroke="var(--info)" 
-                    strokeWidth={2}
-                    dot={false}
-                    name="Sentiment"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-        </div>
-      )
-    }
-  ];
+  if (loading) return <div className="flex items-center justify-center py-20"><Loader2 size={28} className="animate-spin text-cyan-400" /></div>;
+  if (error && !meeting) return <div className="page-shell space-y-4"><div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-400"><AlertCircle className="mr-2 inline" size={16} />{error}</div><div className="flex gap-4"><button onClick={retry} className="text-sm font-semibold text-cyan-400">Retry</button><button onClick={() => navigate('/history')} className="text-sm text-slate-500">Back to history</button></div></div>;
+  if (!meeting) return null;
 
   return (
-    <motion.div 
-      className="meeting-report"
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-    >
-      {/* Back & Breadcrumb */}
-      <div className="back-btn-container" onClick={() => navigate('/')}>
-        <ChevronLeft size={16} />
-        <span>Back to Dashboard</span>
-      </div>
-
-      {/* Header */}
-      <div className="report-header">
+    <div className="page-shell space-y-6">
+      <button onClick={() => navigate('/history')} className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-cyan-400"><ArrowLeft size={16} /> Back to meeting history</button>
+      <div className="page-header">
         <div>
-          <h1 style={{ fontSize: '1.8rem', letterSpacing: '-0.02em', margin: '8px 0 4px' }}>
-            {currentMeeting.title}
-          </h1>
-          <div className="meeting-meta">
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Clock size={14} />
-              {currentMeeting.date}
-            </span>
-            <div className="meta-divider" />
-            <span>Duration: {currentMeeting.duration}</span>
-            <div className="meta-divider" />
-            <span>{currentMeeting.participants} Participants</span>
-          </div>
+          <h1 className="page-title">{meeting.title}</h1>
+          <p className="page-description flex flex-wrap items-center gap-2"><Clock size={14} />{new Date(meeting.scheduledAt || meeting.createdAt).toLocaleString()}<span>·</span>{meeting.memberIds.length} participant{meeting.memberIds.length === 1 ? '' : 's'}</p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <Badge variant="success">Analyzed</Badge>
-        </div>
+        {meeting.botStatus && <Badge variant={meeting.botStatus === 'failed' ? 'danger' : meeting.botStatus === 'done' ? 'success' : 'warning'}>{statusLabel[meeting.botStatus] || meeting.botStatus}</Badge>}
       </div>
+      {error && <div className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400"><span><AlertCircle className="mr-2 inline" size={15} />{error}</span><button onClick={retry} className="font-semibold text-red-300 hover:text-white">Retry</button></div>}
 
-      {/* Layout Grid */}
-      <div className="report-grid">
-        {/* Left Column */}
-        <div className="left-column">
-          {/* Mock Player */}
-          <div className="video-player-placeholder">
-            <div className="player-overlay">
-              <div className="player-icon-container">
-                <Video size={28} />
-              </div>
-              <h3 className="player-title">Meeting Recording</h3>
-              <p className="player-subtitle">Video playback integration is currently on hold</p>
-            </div>
+      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <section className="ui-card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4"><div className="flex items-center gap-2"><FileText size={16} className="text-cyan-400" /><h2 className="text-sm font-semibold text-white">Transcript</h2></div><span className="text-xs text-slate-500">{transcript ? `${transcript.rawText.length.toLocaleString()} characters` : 'Pending'}</span></div>
+          {transcript ? <><div className="border-b border-white/[0.06] px-5 py-3"><div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2"><Search size={14} className="text-slate-500" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search transcript" className="w-full bg-transparent text-sm text-slate-200 outline-none placeholder:text-slate-600" /></div></div><pre className="max-h-[620px] overflow-y-auto whitespace-pre-wrap p-5 font-sans text-sm leading-relaxed text-slate-400">{transcriptParts.map((part, index) => part.toLowerCase() === search.toLowerCase() && search ? <mark key={index}>{part}</mark> : part)}</pre></> : <div className="p-8 text-center text-sm text-slate-600">The transcript is not available yet.</div>}
+        </section>
+
+        <section className="ui-card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4"><h2 className="text-sm font-semibold text-white">Action items</h2><span className="text-xs text-slate-500">{tasks.length} total</span></div>
+          <div className="space-y-3 p-4">
+            {tasks.length === 0 && <div className="py-8 text-center text-sm text-slate-600">No tasks are linked to this meeting.</div>}
+            {tasks.map((task) => <div key={task.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"><div className="flex items-start justify-between gap-3"><p className={`text-sm font-medium ${task.status === 'done' ? 'text-slate-500 line-through' : 'text-slate-200'}`}>{task.title}</p>{task.status === 'done' && <CheckCircle2 size={15} className="shrink-0 text-emerald-400" />}</div>{task.description && <p className="mt-1 text-xs leading-relaxed text-slate-500">{task.description}</p>}<div className="mt-3 flex items-center justify-between gap-2 border-t border-white/[0.05] pt-3"><span className="text-xs text-slate-600">{task.assignedTo?.name || 'Unassigned'}</span><select value={task.status} disabled={updatingTask === task.id} onChange={(event) => changeTaskStatus(task, event.target.value as Task['status'])} className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase outline-none ${taskStatusClass[task.status]}`}><option value="todo">To do</option><option value="in_progress">In progress</option><option value="done">Done</option></select></div></div>)}
           </div>
-
-          {/* AI Insights & Actions */}
-          <Tabs tabs={leftTabs} defaultTab="summary" />
-        </div>
-
-        {/* Right Column */}
-        <div className="right-column">
-          <Tabs tabs={rightTabs} defaultTab="transcript" />
-        </div>
+        </section>
       </div>
-    </motion.div>
+    </div>
   );
 };

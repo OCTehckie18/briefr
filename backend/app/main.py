@@ -87,5 +87,11 @@ def _register_routes():
     except Exception:
         pass
 
+    try:
+        from app.routes import academic
+        app.include_router(academic.router, prefix="/api/academic", tags=["academic"])
+    except Exception:
+        pass
+
 
 _register_routes()

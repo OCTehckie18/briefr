@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Video,
   Calendar,
@@ -15,27 +14,11 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import axiosClient from '../../api/axios';
+import { getMeetings, getProjects, getUsers, createMeeting } from '../../api/endpoints';
+import type { Meeting, Project, User } from '../../api/endpoints';
+import { useAuth } from '../../store/AuthContext';
 
 // ── Types ──────────────────────────────────────────────────────────────────
-
-interface Project {
-  id: string;
-  name: string;
-}
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-}
-
-interface Meeting {
-  id: string;
-  title: string;
-  botStatus: string | null;
-  scheduledAt: string | null;
-  meetingLink: string | null;
-}
 
 // ── Bot status badge ───────────────────────────────────────────────────────
 
@@ -62,7 +45,7 @@ function BotStatusBadge({ status }: { status: string | null }) {
 // ── Scheduled meeting status card ──────────────────────────────────────────
 
 function MeetingStatusCard({ meeting, onDismiss }: { meeting: Meeting; onDismiss: () => void }) {
-  const [liveStatus, setLiveStatus] = useState<string | null>(meeting.botStatus);
+  const [liveStatus, setLiveStatus] = useState<string | null>(meeting.botStatus ?? null);
   const pollRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -72,8 +55,9 @@ function MeetingStatusCard({ meeting, onDismiss }: { meeting: Meeting; onDismiss
     pollRef.current = window.setInterval(async () => {
       try {
         const { data } = await axiosClient.get<Meeting>(`/api/meetings/${meeting.id}`);
-        setLiveStatus(data.botStatus);
-        if (TERMINAL.has(data.botStatus)) clearInterval(pollRef.current!);
+        const nextStatus = data.botStatus ?? null;
+        setLiveStatus(nextStatus);
+        if (TERMINAL.has(nextStatus)) clearInterval(pollRef.current!);
       } catch {}
     }, 10_000);
 
@@ -124,8 +108,7 @@ function MeetingStatusCard({ meeting, onDismiss }: { meeting: Meeting; onDismiss
 // ── Main page ──────────────────────────────────────────────────────────────
 
 export const ScheduleMeetingPage: React.FC = () => {
-  const navigate = useNavigate();
-
+  const { track } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,12 +127,14 @@ export const ScheduleMeetingPage: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const [projRes, userRes] = await Promise.all([
-          axiosClient.get<Project[]>('/api/projects'),
-          axiosClient.get<User[]>('/api/users'),
+        const [projRes, userRes, meetingRes] = await Promise.all([
+          getProjects(),
+          getUsers(),
+          getMeetings(),
         ]);
         setProjects(projRes.data);
         setUsers(userRes.data);
+        setScheduledMeetings(meetingRes.data.filter((meeting) => meeting.meetingType === (track || 'industry')));
         if (projRes.data.length > 0) setProjectId(projRes.data[0].id);
       } catch {
         setError('Failed to load projects or users.');
@@ -177,16 +162,17 @@ export const ScheduleMeetingPage: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const { data } = await axiosClient.post<Meeting>('/api/meetings', {
+      const { data } = await createMeeting({
         title: title.trim(),
         projectId,
         meetingLink: meetingLink.trim(),
         scheduledAt: new Date(scheduledAt).toISOString(),
         memberIds: selectedMembers,
+        meetingType: track || 'industry',
       });
 
-      // Add to local status tracker
-      setScheduledMeetings((prev) => [data, ...prev]);
+      // Keep the status panel in sync with the persisted meeting record.
+      setScheduledMeetings((prev) => [data, ...prev.filter((meeting) => meeting.id !== data.id)]);
 
       // Reset form
       setTitle('');
@@ -216,7 +202,7 @@ export const ScheduleMeetingPage: React.FC = () => {
     <div className="page-shell">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Schedule Meeting</h1>
+          <h1 className="page-title">{track === 'academic_gd' ? 'Schedule a GD' : 'Schedule Meeting'}</h1>
           <p className="page-description">
             Add a Google Meet link and datetime — Briefr Bot will join automatically, transcribe, and generate tasks.
           </p>
@@ -360,7 +346,7 @@ export const ScheduleMeetingPage: React.FC = () => {
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/20 transition hover:opacity-90 disabled:opacity-50"
             >
               {submitting ? <Loader2 size={16} className="animate-spin" /> : <Video size={16} />}
-              {submitting ? 'Scheduling…' : 'Schedule Meeting'}
+              {submitting ? 'Scheduling…' : track === 'academic_gd' ? 'Schedule GD' : 'Schedule Meeting'}
             </button>
           </div>
         </form>
