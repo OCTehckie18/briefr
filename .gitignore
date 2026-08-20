@@ -1,6 +1,7 @@
 *.md
 !README.md
 !SKILL.md
+DESIGN.md
 
 *.pyc
 

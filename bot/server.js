@@ -38,23 +38,36 @@ app.post("/start-bot", (req, res) => {
     return res.status(400).json({ error: "meetingUrl and meetingId are required" });
   }
 
+  try {
+    const url = new URL(meetingUrl);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+  } catch {
+    return res.status(400).json({ error: "meetingUrl must be a valid HTTP(S) URL" });
+  }
+
   if (activeBots.has(meetingId)) {
     return res.status(409).json({ error: "Bot already running for this meeting" });
   }
 
   console.log(`[BotServer] Spawning bot for meeting ${meetingId} at ${meetingUrl}`);
 
-  const botProcess = fork(path.join(__dirname, "bot.js"), [], {
-    env: {
-      ...process.env,
-      MEETING_URL: meetingUrl,
-      MEETING_ID: meetingId,
-      MEETING_DATE: meetingDate || new Date().toISOString().slice(0, 10),
-      BACKEND_URL: backendUrl || process.env.BACKEND_URL || "http://localhost:8000",
-      BACKEND_TOKEN: backendToken || process.env.BACKEND_TOKEN || "",
-      WHISPER_URL: process.env.WHISPER_URL || "http://localhost:9000",
-    },
-  });
+  let botProcess;
+  try {
+    botProcess = fork(path.join(__dirname, "bot.js"), [], {
+      env: {
+        ...process.env,
+        MEETING_URL: meetingUrl,
+        MEETING_ID: meetingId,
+        MEETING_DATE: meetingDate || new Date().toISOString().slice(0, 10),
+        BACKEND_URL: backendUrl || process.env.BACKEND_URL || "http://localhost:8000",
+        BACKEND_TOKEN: backendToken || process.env.BACKEND_TOKEN || "",
+        WHISPER_URL: process.env.WHISPER_URL || "http://localhost:9000",
+      },
+    });
+  } catch (err) {
+    console.error(`[BotServer] Failed to spawn bot for ${meetingId}:`, err.message);
+    return res.status(503).json({ error: "Unable to start bot process" });
+  }
 
   activeBots.set(meetingId, botProcess);
 

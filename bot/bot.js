@@ -21,6 +21,12 @@ import FormData from "form-data";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { fileURLToPath } from "url";
+
+// `import.meta.dirname` is only available in newer Node versions. Keep the
+// bot compatible with the Node >=18 engine declared in package.json.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const MEETING_URL = process.env.MEETING_URL;
 const MEETING_ID = process.env.MEETING_ID;
@@ -183,8 +189,8 @@ async function run() {
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     // Only load a saved Google session when explicitly enabled. Otherwise the
     // bot uses Meet's guest flow and enters as BOT_NAME.
-    ...(BOT_USE_GOOGLE_AUTH && fs.existsSync(path.join(import.meta.dirname, "auth.json"))
-      ? { storageState: path.join(import.meta.dirname, "auth.json") }
+    ...(BOT_USE_GOOGLE_AUTH && fs.existsSync(path.join(__dirname, "auth.json"))
+      ? { storageState: path.join(__dirname, "auth.json") }
       : {}),
   });
 
