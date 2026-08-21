@@ -5,6 +5,7 @@
   "description": "Playwright bot that joins Google Meet, captures audio, and ships transcripts to the Briefr backend via local Whisper STT.",
   "main": "server.js",
   "scripts": {
+    "test": "node --test",
     "start": "node server.js",
     "install-browsers": "npx playwright install chromium"
   },

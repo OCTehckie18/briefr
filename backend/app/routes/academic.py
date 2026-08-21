@@ -73,12 +73,14 @@ def _rubric_out(doc: dict) -> RubricOut:
 
 
 def _session_out(doc: dict) -> AcademicSessionOut:
+    rubric_ids = doc.get("rubricIds") or ([doc["rubricId"]] if doc.get("rubricId") else [])
     return AcademicSessionOut(
         id=str(doc["_id"]),
         title=doc["title"],
         topic=doc["topic"],
         cohortId=doc["cohortId"],
-        rubricId=doc["rubricId"],
+        rubricId=rubric_ids[0] if rubric_ids else None,
+        rubricIds=rubric_ids,
         participantIds=doc.get("participantIds", []),
         scheduledAt=doc.get("scheduledAt"),
         durationMinutes=doc.get("durationMinutes", 45),
@@ -101,6 +103,22 @@ async def create_cohort(data: CohortCreate, current_user: dict = Depends(require
 @router.get("/cohorts", response_model=list[CohortOut])
 async def list_cohorts(current_user: dict = Depends(get_current_user)):
     return [_cohort_out(doc) async for doc in academic_cohorts_col.find().sort("name", 1)]
+
+
+@router.patch("/cohorts/{cohort_id}", response_model=CohortOut)
+async def update_cohort(
+    cohort_id: str,
+    data: CohortCreate,
+    current_user: dict = Depends(require_admin),
+):
+    cohort = await academic_cohorts_col.find_one({"_id": _id(cohort_id)})
+    if not cohort:
+        raise HTTPException(status_code=404, detail="Cohort not found")
+    await academic_cohorts_col.update_one(
+        {"_id": cohort["_id"]}, {"$set": data.model_dump()}
+    )
+    cohort.update(data.model_dump())
+    return _cohort_out(cohort)
 
 
 @router.post("/students", response_model=StudentOut)
@@ -145,11 +163,22 @@ async def create_session(
 ):
     if not await academic_cohorts_col.find_one({"_id": _id(data.cohortId)}):
         raise HTTPException(status_code=404, detail="Cohort not found")
-    if not await academic_rubrics_col.find_one({"_id": _id(data.rubricId)}):
-        raise HTTPException(status_code=404, detail="Rubric not found")
+    rubric_ids = [_id(value) for value in data.rubricIds]
+    rubric_count = await academic_rubrics_col.count_documents({"_id": {"$in": rubric_ids}})
+    if rubric_count != len(rubric_ids):
+        raise HTTPException(status_code=404, detail="One or more rubrics not found")
+    participant_ids = [_id(value) for value in data.participantIds]
+    if participant_ids:
+        student_count = await academic_students_col.count_documents({
+            "_id": {"$in": participant_ids}, "cohortId": data.cohortId
+        })
+        if student_count != len(set(data.participantIds)):
+            raise HTTPException(status_code=400, detail="All participants must belong to the selected cohort")
     now = datetime.now(timezone.utc)
     doc = {
         **data.model_dump(),
+        "rubricId": data.rubricIds[0],
+        "rubricIds": data.rubricIds,
         "evaluatorId": str(current_user["_id"]),
         "status": "scheduled" if data.scheduledAt else "draft",
         "createdAt": now,
@@ -255,9 +284,24 @@ async def assess_transcript(
         raise HTTPException(status_code=400, detail="Finalize participant mapping before assessment")
 
     session = await academic_sessions_col.find_one({"meetingId": transcript.get("meetingId")})
-    rubric = await academic_rubrics_col.find_one({"_id": _id(session["rubricId"])}) if session else await academic_rubrics_col.find_one()
-    if not rubric:
+    rubric_ids = (session.get("rubricIds") if session else None) or ([session["rubricId"]] if session and session.get("rubricId") else [])
+    rubrics = []
+    if rubric_ids:
+        async for rubric_doc in academic_rubrics_col.find({"_id": {"$in": [_id(value) for value in rubric_ids]}}):
+            rubrics.append(rubric_doc)
+    else:
+        rubric = await academic_rubrics_col.find_one()
+        if rubric:
+            rubrics.append(rubric)
+    if not rubrics:
         raise HTTPException(status_code=400, detail="No academic rubric is available")
+    rubric = {"dimensions": []}
+    seen_keys: set[str] = set()
+    for rubric_doc in rubrics:
+        for dimension in rubric_doc.get("dimensions", []):
+            if dimension["key"] not in seen_keys:
+                rubric["dimensions"].append(dimension)
+                seen_keys.add(dimension["key"])
 
     mappings = transcript.get("academicParticipantMappings", {})
     students_by_id: dict[str, dict] = {}

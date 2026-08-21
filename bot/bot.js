@@ -22,6 +22,8 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
+import { makeAbsoluteSegments, formatTranscriptAsTxt, buildStructuredTranscript } from "./transcript-utils.js";
+import { getSpeakerTrackerScript } from "./speaker-tracker.js";
 
 // `import.meta.dirname` is only available in newer Node versions. Keep the
 // bot compatible with the Node >=18 engine declared in package.json.
@@ -83,7 +85,7 @@ async function updateBotStatus(status) {
  * Send a webm/opus buffer to the local Whisper service for transcription.
  * Returns the Whisper result, including timestamps, or an empty result.
  */
-async function transcribeChunk(audioBuffer, chunkIndex) {
+async function transcribeChunk(audioBuffer, chunkIndex, chunkOffsetMs = 0) {
   if (audioBuffer.length < MIN_CHUNK_BYTES) {
     log(`Chunk ${chunkIndex} too small (${audioBuffer.length} bytes) — skipping (no real audio).`);
     return { text: "", segments: [] };
@@ -112,10 +114,14 @@ async function transcribeChunk(audioBuffer, chunkIndex) {
       const data = await res.json();
       const preview = (data.text || "").slice(0, 100);
       log(`Chunk ${chunkIndex} [local]: "${preview}${preview.length === 100 ? "…" : ""}"`);
-      try { fs.unlinkSync(tmpPath); } catch {}
+      try { fs.unlinkSync(tmpPath); } catch { }
       return {
         text: data.text || "",
-        segments: Array.isArray(data.segments) ? data.segments : [],
+        segments: makeAbsoluteSegments(
+          Array.isArray(data.segments) ? data.segments : [],
+          chunkOffsetMs,
+          chunkIndex,
+        ),
       };
     }
 
@@ -130,7 +136,42 @@ async function transcribeChunk(audioBuffer, chunkIndex) {
   // be empty when the fallback is used. Full transcript text is preserved.
   if (!HF_TOKEN) {
     log(`Chunk ${chunkIndex}: No HF_TOKEN configured — cannot fall back. Skipping chunk.`);
-    try { fs.unlinkSync(tmpPath); } catch {}
+    try { fs.unlinkSync(tmpPath); } catch { }
+    return { text: "", segments: [] };
+  }
+
+  try {
+    log(`Sending chunk ${chunkIndex} to HuggingFace (${HF_WHISPER_MODEL})...`);
+    const hfRes = await fetch(
+      `https://api-inference.huggingface.co/models/${HF_WHISPER_MODEL}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${HF_TOKEN}`,
+          "Content-Type": "audio/webm",
+        },
+        body: audioBuffer,
+      }
+    );
+
+    if (!hfRes.ok) {
+      const hfErr = await hfRes.text();
+      log(`HuggingFace error on chunk ${chunkIndex}: HTTP ${hfRes.status} — ${hfErr}`);
+    };
+
+
+    const errBody = await res.text();
+    log(`Local Whisper error on chunk ${chunkIndex}: HTTP ${res.status} — ${errBody}. Trying HuggingFace fallback...`);
+  } catch (localErr) {
+    log(`Local Whisper unreachable for chunk ${chunkIndex}: ${localErr.message}. Trying HuggingFace fallback...`);
+  }
+
+  // ── Attempt 2: HuggingFace Inference API fallback ──────────────────────────
+  // NOTE: HF Inference API does not return timestamped segments — segments will
+  // be empty when the fallback is used. Full transcript text is preserved.
+  if (!HF_TOKEN) {
+    log(`Chunk ${chunkIndex}: No HF_TOKEN configured — cannot fall back. Skipping chunk.`);
+    try { fs.unlinkSync(tmpPath); } catch { }
     return { text: "", segments: [] };
   }
 
@@ -163,15 +204,19 @@ async function transcribeChunk(audioBuffer, chunkIndex) {
     log(`HuggingFace request failed for chunk ${chunkIndex}: ${hfErr.message}`);
     return { text: "", segments: [] };
   } finally {
-    try { fs.unlinkSync(tmpPath); } catch {}
+    try { fs.unlinkSync(tmpPath); } catch { }
   }
 }
 
 /**
  * Ship the final assembled transcript to the Briefr backend.
+ *
+ * @param {string}  fullTranscript  Plain-text transcript ("[HH:MM:SS] Name: text" per line)
+ * @param {Array}   segments        Structured dialogue entries or Whisper segments
+ * @param {string}  captureMode     "speaker_glow" | "fallback_chunked"
  */
-async function sendTranscriptToBackend(fullTranscript, segments) {
-  log(`Sending transcript (${fullTranscript.length} chars) to backend...`);
+async function sendTranscriptToBackend(fullTranscript, segments, captureMode = "speaker_glow") {
+  log(`Sending transcript (${fullTranscript.length} chars, mode=${captureMode}) to backend...`);
   try {
     const res = await fetch(`${BACKEND_URL}/api/bot/transcript-ready`, {
       method: "POST",
@@ -182,11 +227,9 @@ async function sendTranscriptToBackend(fullTranscript, segments) {
       body: JSON.stringify({
         meetingId: MEETING_ID,
         transcript: fullTranscript,
-        // Keep the timestamped chunks. Speaker is intentionally null until a
-        // diarization/voice-identity step assigns it; guessing from wording
-        // produces incorrect names.
         segments,
         meeting_date: MEETING_DATE,
+        captureMode,
       }),
     });
 
@@ -345,7 +388,20 @@ async function run() {
     });
   });
 
-  // Track collected audio chunk texts
+  // ── Speaker-aware capture state ─────────────────────────────────────────
+  // Dialogue entries produced by the speaker-glow tracker + Whisper.
+  // Each entry: { speakerId, speakerName, timestamp, dialogue, short, hadOverlap }
+  const dialogueEntries = [];
+
+  // Pending in-page speaker turns: speakerId → turn metadata.
+  // Filled by __briefrSpeakerTurnStart__, consumed by __briefrSpeakerTurnEnd__.
+  const pendingTurns = new Map();
+
+  // Whether the speaker-glow tracker produced at least one entry.
+  // Used to decide whether to fall back to chunk-based assembly at the end.
+  let captureMode = "speaker_glow";
+
+  // Track collected audio chunk texts (fallback / legacy path)
   const audioChunks = [];
   const transcriptSegments = [];
   // Keep every in-flight Whisper request alive until it has completed. The
@@ -353,19 +409,55 @@ async function run() {
   const pendingTranscriptions = new Set();
   let chunkIndex = 0;
 
-  // Expose a function the in-page recorder calls to deliver each audio blob
-  await page.exposeFunction("__briefrAudioChunk__", async (base64Audio) => {
+  // Meeting wall-clock start time (set once admitted).
+  let meetingStartedAt = null;
+
+  // ── Expose callbacks for the in-page speaker tracker ──────────────────────
+
+  // Called when a speaker's glow turns ON (turn starts).
+  await page.exposeFunction("__briefrSpeakerTurnStart__", (turnMeta) => {
+    if (turnMeta.isOverlap) {
+      log(`[OVERLAP] ${turnMeta.speakerName} started speaking during an active turn.`);
+      return;
+    }
+    log(`Turn START: ${turnMeta.speakerName} (${turnMeta.speakerId})`);
+  });
+
+  // Called when a speaker's glow turns OFF (after MIN_SILENCE_MS debounce).
+  // The audio blob will arrive via __briefrAudioChunk__ shortly after, tagged
+  // with this same turnMeta so we can join them.
+  await page.exposeFunction("__briefrSpeakerTurnEnd__", (turnMeta) => {
+    log(`Turn END:   ${turnMeta.speakerName} (${turnMeta.durationMs}ms${turnMeta.short ? " [short]" : ""}${turnMeta.hadOverlap ? " [overlap]" : ""})`);
+  });
+
+  // Expose a function the in-page recorder calls to deliver each audio blob.
+  // turnMeta is set by the speaker-glow recorder wrapper (null in fallback mode).
+  await page.exposeFunction("__briefrAudioChunk__", async (base64Audio, chunkOffsetMs = 0, turnMeta = null) => {
     const transcription = (async () => {
       const buf = Buffer.from(base64Audio, "base64");
       const currentChunk = chunkIndex++;
-      const result = await transcribeChunk(buf, currentChunk);
-      if (result.text.trim()) audioChunks[currentChunk] = result.text.trim();
-      for (const segment of result.segments) {
-        transcriptSegments.push({
-          ...segment,
-          chunkIndex: currentChunk,
-          speaker: segment.speaker || null,
-        });
+      const result = await transcribeChunk(buf, currentChunk, chunkOffsetMs);
+
+      if (turnMeta && turnMeta.speakerId) {
+        // ── Speaker-glow path ───────────────────────────────────────────────
+        const text = result.text.trim();
+        if (text) {
+          dialogueEntries.push({
+            speakerId: turnMeta.speakerId,
+            speakerName: turnMeta.speakerName || "Unknown",
+            timestamp: turnMeta.timestamp || "00:00:00",
+            dialogue: text,
+            short: turnMeta.short || false,
+            hadOverlap: turnMeta.hadOverlap || false,
+          });
+          log(`Dialogue [${turnMeta.timestamp}] ${turnMeta.speakerName}: "${text.slice(0, 80)}${text.length > 80 ? "…" : ""}"`);
+        }
+      } else {
+        // ── Fallback / legacy path (no speaker attribution) ─────────────────
+        if (result.text.trim()) audioChunks[currentChunk] = result.text.trim();
+        for (const segment of result.segments) {
+          transcriptSegments.push({ ...segment });
+        }
       }
     })();
 
@@ -422,7 +514,7 @@ async function run() {
           await btn.click();
           log(`Clicked: "${label}"`);
         }
-      } catch {}
+      } catch { }
     }
 
     // ── 4. Ask to join ──────────────────────────────────────────────────────
@@ -436,7 +528,7 @@ async function run() {
           joined = true;
           break;
         }
-      } catch {}
+      } catch { }
     }
 
     if (!joined) {
@@ -465,6 +557,20 @@ async function run() {
     );
     log("Admitted to meeting! Starting audio capture.");
     await updateBotStatus("recording");
+    meetingStartedAt = new Date();
+
+    // Inject the speaker-glow tracker. We do this after admission so the
+    // participant tiles are already in the DOM.
+    await page.evaluate(getSpeakerTrackerScript({
+      minSilenceMs: 1500,
+      minUtteranceMs: 800,
+      pollMs: 300,
+    }));
+
+    // Expose the meeting start time to the in-page tracker for timestamp math.
+    await page.evaluate((startMs) => {
+      window.__briefrMeetingStartMs__ = startMs;
+    }, performance.now ? performance.now() : Date.now());
 
     // Give WebRTC a moment to fully establish streams after admission
     await page.waitForTimeout(2_000);
@@ -511,7 +617,7 @@ async function run() {
           try {
             const src = ctx.createMediaStreamSource(el.srcObject);
             src.connect(dest);
-          } catch {}
+          } catch { }
         });
       });
       observer.observe(document.body, { childList: true, subtree: true });
@@ -525,77 +631,132 @@ async function run() {
 
       console.log("[Briefr] Starting MediaRecorder with mimeType:", mimeType || "(browser default)");
 
+      // When the speaker tracker fires __briefrSpeakerTurnEnd__, we need to
+      // emit the current audio buffer tagged with that speaker's metadata.
+      // We store the latest turn metadata so the onstop handler can attach it
+      // to the blob before calling __briefrAudioChunk__.
+      let currentTurnMeta = null;
+
+      // Listen for turn-end signals from the tracker (injected after admission)
+      window.__briefrSpeakerTurnEnd__ = window.__briefrSpeakerTurnEnd__ || function () { };
+      const _origTurnEnd = window.__briefrSpeakerTurnEnd__;
+      window.__briefrSpeakerTurnEnd__ = function (meta) {
+        _origTurnEnd(meta);  // still call the exposed Node callback
+        currentTurnMeta = meta;
+        // Flush the recorder now so this blob maps 1-to-1 to this speaker turn
+        if (recorder.state === 'recording' && !window.__briefrIsFlushing__) {
+          window.__briefrIsFlushing__ = true;
+          flushing = true;
+          restartAfterFlush = true;
+          recorder.stop();
+        }
+      };
+
       const recorder = new MediaRecorder(dest.stream, mimeType ? { mimeType } : {});
       let chunks = [];
+      let recorderStartedAt = performance.now();
+      let chunkStartOffsetMs = 0;
+      let restartAfterFlush = false;
+      let flushing = false;
+
+      const resolveRecorderDone = () => {
+        window.__briefrRecorderDone__?.();
+        window.__briefrRecorderDone__ = null;
+      };
+
+      const startRecorder = () => {
+        chunkStartOffsetMs = performance.now() - recorderStartedAt;
+        recorder.start();
+      };
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunks.push(e.data);
       };
 
       recorder.onstop = async () => {
+        flushing = true;
+        const intendedRestart = restartAfterFlush;
+        restartAfterFlush = false;
         if (chunks.length === 0) {
           console.log("[Briefr] Recorder stopped with 0 chunks.");
-          window.__briefrRecorderDone__?.();
-          window.__briefrRecorderDone__ = null;
-          return;
-        }
-        const blob = new Blob(chunks, { type: recorder.mimeType });
-        console.log(`[Briefr] Blob ready: ${blob.size} bytes, type=${blob.type}`);
+        } else {
+          const blob = new Blob(chunks, { type: recorder.mimeType });
+          const blobChunkStartOffsetMs = chunkStartOffsetMs;
+          console.log(`[Briefr] Blob ready: ${blob.size} bytes, type=${blob.type}`);
 
-        // Convert blob → base64 without btoa string-length limits
-        const arrayBuffer = await blob.arrayBuffer();
-        const uint8 = new Uint8Array(arrayBuffer);
-        let binary = "";
-        // Process in 8192-byte chunks to avoid call stack limits
-        for (let i = 0; i < uint8.length; i += 8192) {
-          binary += String.fromCharCode(...uint8.subarray(i, i + 8192));
+          // Convert blob → base64 without btoa string-length limits
+          const arrayBuffer = await blob.arrayBuffer();
+          const uint8 = new Uint8Array(arrayBuffer);
+          let binary = "";
+          for (let i = 0; i < uint8.length; i += 8192) {
+            binary += String.fromCharCode(...uint8.subarray(i, i + 8192));
+          }
+          const base64 = btoa(binary);
+          // Pass the current speaker turn metadata alongside the audio blob
+          const turnSnapshot = currentTurnMeta;
+          currentTurnMeta = null;
+          await window.__briefrAudioChunk__(base64, blobChunkStartOffsetMs, turnSnapshot);
         }
-        const base64 = btoa(binary);
-        // Await the exposed Node callback so the final page evaluation can
-        // observe that the chunk has been handed off to Whisper.
-        await window.__briefrAudioChunk__(base64);
         chunks = [];
-        window.__briefrRecorderDone__?.();
-        window.__briefrRecorderDone__ = null;
+        flushing = false;
+        window.__briefrIsFlushing__ = false;
+
+        if (intendedRestart && !window.__briefrStopping__) {
+          startRecorder();
+        } else {
+          resolveRecorderDone();
+        }
       };
 
-      recorder.start();
+      recorderStartedAt = performance.now();
+      startRecorder();
       window.__briefrRecorder__ = recorder;
 
       // ── FIX: guard against recorder race condition ─────────────────────────
       // onstop is async (blob encode + Node callback). If we call recorder.start()
       // before onstop resolves, the new recorder captures audio before the
       // previous chunk has been handed off, corrupting both chunks.
-      // __briefrIsFlushing__ is set true during onstop and cleared once done.
+      // Keep the state on the page so the final stop can wait for an in-flight
+      // Whisper handoff instead of closing the browser mid-flush.
       window.__briefrIsFlushing__ = false;
 
       // Flush every CHUNK_DURATION_MS — but only when the previous flush is done
       window.__briefrChunkTimer__ = setInterval(() => {
         if (recorder.state === "recording" && !window.__briefrIsFlushing__) {
           window.__briefrIsFlushing__ = true;
-          // Swap onstop to a one-shot that restarts the recorder after flushing
-          const originalOnstop = recorder.onstop;
-          recorder.onstop = async (e) => {
-            if (originalOnstop) await originalOnstop.call(recorder, e);
-            recorder.start();
-            window.__briefrIsFlushing__ = false;
-          };
+          flushing = true;
+          restartAfterFlush = true;
           recorder.stop();
         }
+        window.__briefrIsFlushing__ = flushing;
       }, chunkDurationMs);
 
       console.log("[Briefr] Recorder started.");
     }, CHUNK_DURATION_MS);
 
     // ── 7. Wait for meeting to end or timeout ──────────────────────────────
-    log(`Waiting for meeting to end (max ${MAX_DURATION_MS / 60000} min)...`);
-    const reason = await Promise.race([
-      page.waitForSelector(
-        '[data-call-type="post_call"], [jsname="r4nke"], h1:has-text("left"), h1:has-text("ended")',
-        { timeout: MAX_DURATION_MS }
-      ).then(() => "ended").catch(() => "timeout"),
-      new Promise((resolve) => setTimeout(() => resolve("timeout"), MAX_DURATION_MS)),
-    ]);
+    const reason = await page.waitForFunction(() => {
+      const bodyText = (document.body?.innerText || "").toLowerCase();
+      const endMessages = [
+        "you left the meeting",
+        "you've left the meeting",
+        "you have left the meeting",
+        "the meeting has ended",
+        "meeting ended",
+        "call ended",
+        "you were removed from the meeting",
+        "you've been removed from the meeting",
+        "you can't join this video call",
+        "return to home screen",
+      ];
+
+      return (
+        endMessages.some((message) => bodyText.includes(message)) ||
+        Boolean(document.querySelector('[data-call-type="post_call"]'))
+      );
+    }, { timeout: 0 })
+      .then(() => "ended")
+      .catch((e) => `error: ${e.message}`);
 
     log(`Meeting session over: ${reason}`);
 
@@ -603,12 +764,15 @@ async function run() {
     await page.evaluate(() => new Promise((resolve) => {
       clearInterval(window.__briefrChunkTimer__);
       window.__briefrRecorderDone__ = resolve;
+      window.__briefrStopping__ = true;
       if (window.__briefrRecorder__?.state === "recording") {
+        // The stable onstop handler will resolve after the final Whisper
+        // handoff. It will not restart because stopping is true.
         window.__briefrRecorder__.stop();
-      } else {
+      } else if (!window.__briefrIsFlushing__) {
         resolve();
       }
-    })).catch(() => {});
+    })).catch(() => { });
 
     // Wait for the final MediaRecorder callback and every Whisper request.
     // A fixed delay was unreliable because faster-whisper can take longer
@@ -631,12 +795,35 @@ async function run() {
   }
 
   // ── 8. Assemble and ship transcript ────────────────────────────────────
-  const fullTranscript = audioChunks.filter(Boolean).join(" ").trim();
-  transcriptSegments.sort((a, b) => a.chunkIndex - b.chunkIndex || a.start - b.start);
-  log(`Total chunks: ${audioChunks.length}, transcript length: ${fullTranscript.length} chars.`);
+  const meetingEndedAt = new Date();
+
+  let fullTranscript;
+  let finalSegments;
+  let finalCaptureMode;
+
+  if (dialogueEntries.length > 0) {
+    // ── Primary path: speaker-glow capture produced entries ─────────────
+    finalCaptureMode = "speaker_glow";
+    fullTranscript = formatTranscriptAsTxt(dialogueEntries);
+    finalSegments = buildStructuredTranscript(
+      dialogueEntries,
+      MEETING_ID,
+      finalCaptureMode,
+      meetingStartedAt,
+      meetingEndedAt,
+    ).timeline;
+    log(`Speaker-glow capture: ${dialogueEntries.length} dialogue entries, ${fullTranscript.length} chars.`);
+  } else {
+    // ── Fallback path: glow detection yielded nothing, use raw chunks ────
+    finalCaptureMode = "fallback_chunked";
+    fullTranscript = audioChunks.filter(Boolean).join(" ").trim();
+    transcriptSegments.sort((a, b) => a.chunkIndex - b.chunkIndex || a.start - b.start);
+    finalSegments = transcriptSegments;
+    log(`Fallback capture: ${audioChunks.length} chunks, ${fullTranscript.length} chars.`);
+  }
 
   if (fullTranscript.length > 0) {
-    const accepted = await sendTranscriptToBackend(fullTranscript, transcriptSegments);
+    const accepted = await sendTranscriptToBackend(fullTranscript, finalSegments, finalCaptureMode);
     await updateBotStatus(accepted ? "done" : "failed");
   } else {
     log("No transcript captured — nothing to send.");

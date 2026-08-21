@@ -110,6 +110,7 @@ export interface AcademicCohort {
   section: string;
   academicYear: string;
   description: string;
+  createdAt?: string;
 }
 
 export interface AcademicStudent {
@@ -139,7 +140,8 @@ export interface AcademicSession {
   title: string;
   topic: string;
   cohortId: string;
-  rubricId: string;
+  rubricId?: string;
+  rubricIds: string[];
   participantIds: string[];
   scheduledAt?: string;
   durationMinutes: number;
@@ -151,6 +153,8 @@ export interface AcademicSession {
 export const getAcademicCohorts = () => api.get<AcademicCohort[]>('/api/academic/cohorts');
 export const createAcademicCohort = (data: { name: string; grade: string; section: string; academicYear: string; description?: string }) =>
   api.post<AcademicCohort>('/api/academic/cohorts', data);
+export const updateAcademicCohort = (id: string, data: { name: string; grade: string; section: string; academicYear: string; description?: string }) =>
+  api.patch<AcademicCohort>(`/api/academic/cohorts/${id}`, data);
 export const getAcademicStudents = (cohortId?: string) =>
   api.get<AcademicStudent[]>('/api/academic/students', { params: cohortId ? { cohortId } : undefined });
 export const createAcademicStudent = (data: { studentId: string; name: string; email?: string; cohortId: string }) =>
@@ -162,7 +166,7 @@ export const createAcademicSession = (data: {
   title: string;
   topic: string;
   cohortId: string;
-  rubricId: string;
+  rubricIds: string[];
   participantIds: string[];
   scheduledAt?: string;
   durationMinutes: number;

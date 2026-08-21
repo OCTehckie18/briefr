@@ -93,6 +93,14 @@ async def process_transcript(
     # ── 3. Insert Task documents ──────────────────────────────────────────────
     transcript_id_str = str(transcript["_id"])
     meeting_id_str = transcript.get("meetingId", "")
+    
+    from app.db import meetings_col
+    try:
+        meeting = await meetings_col.find_one({"_id": ObjectId(meeting_id_str)})
+        project_id_str = str(meeting.get("projectId", "")) if meeting else ""
+    except Exception:
+        project_id_str = ""
+
     tasks_created = 0
     matched_users: list[str] = []
     unmatched_names: list[str] = []
@@ -138,7 +146,7 @@ async def process_transcript(
                 "title": item.get("title", ""),
                 "description": item.get("description"),
                 "transcriptId": transcript_id_str,
-                "projectId": meeting_id_str,
+                "projectId": project_id_str,
                 "assignedTo": assigned_to,
                 "deadline": parsed_deadline,
                 "priority": item.get("priority", "medium"),

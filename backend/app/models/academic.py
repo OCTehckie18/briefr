@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class CohortCreate(BaseModel):
@@ -53,11 +53,25 @@ class AcademicSessionCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     topic: str = Field(min_length=1, max_length=500)
     cohortId: str = Field(min_length=1)
-    rubricId: str = Field(min_length=1)
+    # rubricId is retained for backwards compatibility with existing clients;
+    # new sessions may use any number of rubricIds.
+    rubricId: Optional[str] = Field(default=None, min_length=1)
+    rubricIds: List[str] = Field(default_factory=list, max_length=20)
     participantIds: List[str] = Field(default_factory=list, max_length=100)
     scheduledAt: Optional[datetime] = None
     durationMinutes: int = Field(default=45, ge=1, le=480)
     meetingId: Optional[str] = None
+
+    @model_validator(mode="after")
+    def normalize_rubrics(self):
+        ids = list(dict.fromkeys(self.rubricIds))
+        if self.rubricId and self.rubricId not in ids:
+            ids.insert(0, self.rubricId)
+        if not ids:
+            raise ValueError("At least one rubric is required")
+        self.rubricIds = ids
+        self.rubricId = ids[0]
+        return self
 
 
 class AcademicSessionOut(AcademicSessionCreate):

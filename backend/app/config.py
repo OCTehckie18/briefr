@@ -16,11 +16,11 @@ class Settings(BaseSettings):
 
     # LLM — Groq
     LLM_API_KEY: str = ""
-    # llama-3.1-8b-instant is the lightest active free-tier Groq model.
-    # Use llama-3.3-70b-versatile for higher quality at the cost of latency.
-    LLM_MODEL: str = "llama-3.1-8b-instant"
-    LLM_FALLBACK_MODEL: str = "llama-3.3-70b-versatile"
-    ACADEMIC_LLM_MODEL: str = "llama-3.3-70b-versatile"
+    # Groq retired the former Llama 3.1/3.3 model IDs in August 2026.
+    # Keep these configurable so deployments can select an allowed model.
+    LLM_MODEL: str = "openai/gpt-oss-120b"
+    LLM_FALLBACK_MODEL: str = "qwen/qwen3.6-27b"
+    ACADEMIC_LLM_MODEL: str = "qwen/qwen3.6-27b"
     ACADEMIC_LLM_MAX_TOKENS: int = 3000
 
     # Email / SMTP

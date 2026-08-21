@@ -5,7 +5,7 @@ Receives the completed transcript from the Node.js bot microservice and
 triggers the full SKILL.md extraction pipeline (LLM → tasks → DB).
 
 POST /api/bot/transcript-ready
-  Body: { meetingId, transcript, meeting_date }
+  Body: { meetingId, transcript, meeting_date, segments, captureMode }
 
 This is an internal endpoint — it uses a shared secret or is firewalled
 to only accept calls from localhost. For now, any authenticated user can
@@ -14,11 +14,11 @@ call it, but a dedicated internal secret is recommended in production.
 
 import logging
 from datetime import datetime, timezone
+from typing import Any, Optional
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from typing import Any
 
 from app.db import meetings_col, transcripts_col
 from app.dependencies import get_current_user
@@ -32,6 +32,7 @@ class TranscriptReadyPayload(BaseModel):
     transcript: str
     meeting_date: str  # YYYY-MM-DD — used as the anchor date for LLM deadline parsing
     segments: list[dict[str, Any]] = Field(default_factory=list)
+    captureMode: Optional[str] = None  # "speaker_glow" | "fallback_chunked" | None
 
 
 @router.post("/transcript-ready")
@@ -59,15 +60,22 @@ async def transcript_ready(
     if not meeting:
         raise HTTPException(status_code=404, detail="Meeting not found")
 
-    log.info(f"[BotRoute] Received transcript for meeting {meeting_id} ({len(raw_text)} chars)")
+    log.info(
+        f"[BotRoute] Received transcript for meeting {meeting_id} "
+        f"({len(raw_text)} chars, captureMode={payload.captureMode})"
+    )
 
     # ── 2. Create the transcript document ────────────────────────────────────
     transcript_doc = {
         "meetingId": meeting_id,
         "rawText": raw_text,
-        # Timestamped Whisper output is retained separately from rawText so a
-        # diarization pass can attach speaker/speakerId without reparsing text.
+        # Structured dialogue entries (speaker_glow mode) or Whisper segments
+        # (fallback_chunked mode). Both are stored so the LLM pipeline can use
+        # whichever level of detail is available.
         "segments": payload.segments,
+        # captureMode tells downstream consumers whether speaker attribution is
+        # available in segments ("speaker_glow") or absent ("fallback_chunked").
+        "captureMode": payload.captureMode or "fallback_chunked",
         "extractedTasks": [],
         "structuredExtraction": None,
         "createdAt": datetime.now(timezone.utc),
@@ -163,7 +171,7 @@ async def transcript_ready(
                     "title": item.get("title", ""),
                     "description": item.get("description"),
                     "transcriptId": transcript_id_str,
-                    "projectId": meeting_id,
+                    "projectId": str(meeting.get("projectId", "")),
                     "assignedTo": assigned_to,
                     "deadline": parsed_deadline,
                     "priority": item.get("priority", "medium"),
@@ -198,4 +206,5 @@ async def transcript_ready(
         "tasks_created": len(task_docs),
         "matched_users": matched_users,
         "unmatched_names": unmatched_names,
+        "captureMode": payload.captureMode,
     }

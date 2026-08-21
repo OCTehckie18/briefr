@@ -31,7 +31,7 @@ export const MeetingReport: React.FC = () => {
         const currentTranscript = transcriptRes.data.find((item) => item.meetingId === currentMeeting.id) || null;
         setMeeting(currentMeeting);
         setTranscript(currentTranscript);
-        setTasks(taskRes.data.filter((task) => task.projectId === currentMeeting.projectId || task.transcriptId === currentTranscript?.id));
+        setTasks(taskRes.data.filter((task) => task.transcriptId === currentTranscript?.id));
       })
       .catch((err: any) => setError(err.response?.data?.detail || 'Could not load this meeting.'))
       .finally(() => setLoading(false));

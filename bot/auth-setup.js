@@ -19,6 +19,24 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const AUTH_FILE = path.join(__dirname, "auth.json");
+const BOT_ENV_FILE = path.join(__dirname, ".env");
+
+function upsertEnvValue(content, key, value) {
+  const line = `${key}=${value}`;
+  const pattern = new RegExp(`^${key}=.*$`, "m");
+  return pattern.test(content)
+    ? content.replace(pattern, line)
+    : `${content.trimEnd()}\n${line}\n`;
+}
+
+function refreshDockerAuthData() {
+  const encodedAuth = fs.readFileSync(AUTH_FILE).toString("base64");
+  const existing = fs.existsSync(BOT_ENV_FILE)
+    ? fs.readFileSync(BOT_ENV_FILE, "utf-8")
+    : "";
+  const updated = upsertEnvValue(existing, "BOT_GOOGLE_AUTH_DATA", encodedAuth);
+  fs.writeFileSync(BOT_ENV_FILE, updated, "utf-8");
+}
 
 async function main() {
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -88,10 +106,13 @@ async function main() {
 
   // Save the full session state (cookies + localStorage)
   await context.storageState({ path: AUTH_FILE });
+  refreshDockerAuthData();
 
   console.log(`\n✓ Session saved to: ${AUTH_FILE}`);
   console.log(`  Total cookies: ${cookies.length} (Google: ${googleCookies.length})`);
-  console.log("\nThe bot will load this session automatically on the next run.");
+  console.log(`  Docker auth data refreshed in: ${BOT_ENV_FILE}`);
+  console.log("\nThe bot will load this refreshed session after its container is recreated.");
+  console.log("Run: docker compose up -d --build --force-recreate bot");
   console.log("Re-run this script if the bot gets blocked again (sessions expire).\n");
 
   await browser.close();

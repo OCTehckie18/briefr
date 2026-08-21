@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY package*.json ./
 RUN npm ci --omit=dev
-COPY bot.js server.js auth-setup.js .env.example ./
+COPY bot.js server.js auth-setup.js transcript-utils.js speaker-tracker.js .env.example ./
 
 EXPOSE 3001
 

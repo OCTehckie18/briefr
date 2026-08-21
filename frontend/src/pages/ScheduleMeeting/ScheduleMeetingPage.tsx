@@ -12,7 +12,9 @@ import {
   Loader2,
   Radio,
   AlertCircle,
+  ArrowRight,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import axiosClient from '../../api/axios';
 import { getMeetings, getProjects, getUsers, createMeeting } from '../../api/endpoints';
 import type { Meeting, Project, User } from '../../api/endpoints';
@@ -96,10 +98,20 @@ function MeetingStatusCard({ meeting, onDismiss }: { meeting: Meeting; onDismiss
         </p>
       )}
       {liveStatus === 'done' && (
-        <p className="mt-3 rounded-xl border border-emerald-900/40 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-300">
-          <CheckCircle2 size={11} className="mr-1 inline" />
-          Transcript processed! Tasks have been created and assigned. Check Kanban or Calendar.
-        </p>
+        <div className="mt-3 rounded-xl border border-emerald-900/40 bg-emerald-950/30 p-3 text-xs text-emerald-300">
+          <p className="flex items-center gap-1.5">
+            <CheckCircle2 size={14} className="shrink-0" />
+            Transcript processed! Tasks have been created and assigned.
+          </p>
+          <div className="mt-3 text-right">
+            <Link
+              to={`/meetings/${meeting.id}`}
+              className="inline-flex items-center gap-1 rounded bg-emerald-900/50 px-3 py-1.5 font-medium text-emerald-200 hover:bg-emerald-800/60 hover:text-white transition-colors"
+            >
+              Analyze transcript <ArrowRight size={12} />
+            </Link>
+          </div>
+        </div>
       )}
     </div>
   );
