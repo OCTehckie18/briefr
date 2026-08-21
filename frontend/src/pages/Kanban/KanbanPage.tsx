@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getTasks, updateTaskStatus } from '../../api/endpoints';
+import { getTasks, publishTask, updateTaskStatus } from '../../api/endpoints';
+import { useAuth } from '../../store/AuthContext';
 import type { Task } from '../../api/endpoints';
 import { Loader2, GripVertical, Inbox } from 'lucide-react';
 
@@ -10,6 +11,7 @@ const COLUMNS: { key: Task['status']; label: string; dot: string; accent: string
 ];
 
 export const KanbanPage: React.FC = () => {
+  const { isAdmin } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [draggedTask, setDraggedTask] = useState<string | null>(null);
@@ -38,6 +40,16 @@ export const KanbanPage: React.FC = () => {
     } catch (err: any) {
       setTasks(previousTasks);
       setError(err.response?.data?.detail || 'Could not save that status change.');
+    }
+  };
+
+  const handlePublish = async (task: Task) => {
+    setError('');
+    try {
+      const response = await publishTask(task.id);
+      setTasks((prev) => prev.map((item) => item.id === task.id ? response.data : item));
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Could not publish that task.');
     }
   };
 
@@ -95,6 +107,18 @@ export const KanbanPage: React.FC = () => {
                       </div>
                       {task.deadline && <span className="text-[10px] font-medium text-slate-600">{new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>}
                     </div>
+                    {isAdmin && (
+                      <div className="mt-3 flex items-center justify-between gap-2">
+                        <span className={`text-[10px] font-semibold uppercase tracking-wider ${task.publicationStatus === 'published' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {task.publicationStatus === 'published' ? 'Live' : 'Draft · review'}
+                        </span>
+                        {task.publicationStatus !== 'published' && (
+                          <button onClick={() => handlePublish(task)} className="rounded-md bg-cyan-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-cyan-300 hover:bg-cyan-500/20">
+                            Publish & notify
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

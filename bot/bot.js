@@ -193,11 +193,14 @@ async function sendTranscriptToBackend(fullTranscript, segments) {
     if (!res.ok) {
       const text = await res.text();
       log(`Backend rejected transcript: HTTP ${res.status} — ${text}`);
+      return false;
     } else {
       log("Transcript accepted by backend. Pipeline triggered.");
+      return true;
     }
   } catch (e) {
     log(`Failed to send transcript: ${e.message}`);
+    return false;
   }
 }
 
@@ -633,8 +636,8 @@ async function run() {
   log(`Total chunks: ${audioChunks.length}, transcript length: ${fullTranscript.length} chars.`);
 
   if (fullTranscript.length > 0) {
-    await sendTranscriptToBackend(fullTranscript, transcriptSegments);
-    await updateBotStatus("done");
+    const accepted = await sendTranscriptToBackend(fullTranscript, transcriptSegments);
+    await updateBotStatus(accepted ? "done" : "failed");
   } else {
     log("No transcript captured — nothing to send.");
     await updateBotStatus("failed");

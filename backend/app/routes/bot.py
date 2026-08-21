@@ -168,6 +168,7 @@ async def transcript_ready(
                     "deadline": parsed_deadline,
                     "priority": item.get("priority", "medium"),
                     "status": item.get("status", "todo"),
+                    "publicationStatus": "draft",
                     "createdAt": datetime.now(timezone.utc),
                 }
             )

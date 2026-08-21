@@ -143,6 +143,7 @@ async def process_transcript(
                 "deadline": parsed_deadline,
                 "priority": item.get("priority", "medium"),
                 "status": item.get("status", "todo"),
+                "publicationStatus": "draft",
                 "createdAt": datetime.now(timezone.utc),
             }
             task_docs.append(task_doc)

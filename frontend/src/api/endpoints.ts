@@ -88,6 +88,7 @@ export interface Task extends Omit<TaskPayload, 'status' | 'priority' | 'assigne
   deadline?: string;
   priority: 'high' | 'medium' | 'low';
   status: 'todo' | 'in_progress' | 'done';
+  publicationStatus: 'draft' | 'published';
   createdAt: string;
 }
 
@@ -99,6 +100,7 @@ export const updateTask = (id: string, data: Partial<TaskPayload>) =>
 export const updateTaskStatus = (id: string, status: Task['status']) =>
   api.patch(`/api/tasks/${id}/status`, { status });
 export const deleteTask = (id: string) => api.delete(`/api/tasks/${id}`);
+export const publishTask = (id: string) => api.post<Task>(`/api/tasks/${id}/publish`);
 
 // ── Academic GD ──
 export interface AcademicCohort {

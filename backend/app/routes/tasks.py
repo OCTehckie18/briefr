@@ -21,6 +21,7 @@ def _task_out(t: dict) -> TaskOut:
         deadline=t.get("deadline"),
         priority=t.get("priority", "medium"),
         status=t.get("status", "todo"),
+        publicationStatus=t.get("publicationStatus", "draft"),
         createdAt=t.get("createdAt", datetime.now(timezone.utc)),
     )
 
@@ -29,7 +30,7 @@ def _task_out(t: dict) -> TaskOut:
 async def create_task(
     data: TaskCreate, current_user: dict = Depends(require_admin)
 ):
-    """Create a new task. Admin only. Sends email notification if assigned."""
+    """Create a reviewable task. It is emailed only after an explicit publish."""
     task_doc = {
         "title": data.title,
         "description": data.description,
@@ -39,30 +40,11 @@ async def create_task(
         "deadline": data.deadline,
         "priority": data.priority,
         "status": data.status,
+        "publicationStatus": "draft",
         "createdAt": datetime.now(timezone.utc),
     }
     result = await tasks_col.insert_one(task_doc)
     task_doc["_id"] = result.inserted_id
-
-    # Send email notification in the background (non-blocking)
-    if data.assignedTo and data.assignedTo.email:
-        try:
-            from app.services.email import send_task_assignment_email
-
-            deadline_str = (
-                data.deadline.strftime("%B %d, %Y") if data.deadline else "No deadline"
-            )
-            asyncio.create_task(
-                send_task_assignment_email(
-                    to_email=data.assignedTo.email,
-                    to_name=data.assignedTo.name,
-                    task_title=data.title,
-                    deadline=deadline_str,
-                    kanban_url="http://localhost:5173/kanban",
-                )
-            )
-        except Exception:
-            pass  # Email failure should not block task creation
 
     return _task_out(task_doc)
 
@@ -174,3 +156,44 @@ async def delete_task(
         raise HTTPException(status_code=404, detail="Task not found")
 
     return {"detail": "Task deleted"}
+
+
+@router.post("/{task_id}/publish", response_model=TaskOut)
+async def publish_task(
+    task_id: str, current_user: dict = Depends(require_admin)
+):
+    """Publish a reviewed task and notify its assignee exactly once."""
+    try:
+        task = await tasks_col.find_one({"_id": ObjectId(task_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid task ID")
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.get("publicationStatus", "draft") == "published":
+        return _task_out(task)
+
+    await tasks_col.update_one(
+        {"_id": ObjectId(task_id)},
+        {"$set": {
+            "publicationStatus": "published",
+            "publishedAt": datetime.now(timezone.utc),
+            "publishedBy": str(current_user["_id"]),
+        }},
+    )
+    published = await tasks_col.find_one({"_id": ObjectId(task_id)})
+
+    assigned_to = published.get("assignedTo") or {}
+    if assigned_to.get("email"):
+        from app.services.email import send_task_assignment_email
+        deadline = published.get("deadline")
+        deadline_str = deadline.strftime("%B %d, %Y") if deadline else "No deadline"
+        asyncio.create_task(send_task_assignment_email(
+            to_email=assigned_to["email"],
+            to_name=assigned_to.get("name", "there"),
+            task_title=published.get("title", "New task"),
+            deadline=deadline_str,
+            kanban_url="http://localhost:5173/kanban",
+        ))
+
+    return _task_out(published)

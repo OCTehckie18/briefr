@@ -43,4 +43,5 @@ class TaskOut(BaseModel):
     deadline: Optional[datetime] = None
     priority: str
     status: str
+    publicationStatus: str = "draft"
     createdAt: datetime
