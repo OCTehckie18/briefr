@@ -1,5 +1,7 @@
 # Briefr
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/OCTehckie18/briefr)
+
 ## Overview
 Briefr is an AI-driven meeting intelligence and task automation application. The platform enables administrators to ingest meeting transcripts, leverage Large Language Models (LLMs) to extract actionable items, and manage the subsequent workflow. Users can review extracted action items, assign tasks to team members, and track progress across various views including a comprehensive dashboard, Kanban board, calendar view, and historical meeting records.
 
