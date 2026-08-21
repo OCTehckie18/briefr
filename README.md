@@ -163,12 +163,12 @@ BOT_USE_GOOGLE_AUTH=false
 
 SMTP settings are optional for core transcript processing but required for task-assignment email notifications. The complete variable list is available in [`backend/.env.example`](backend/.env.example) and [`bot/.env.example`](bot/.env.example).
 
-## Run with Docker Compose
+## Run with Docker Compose (Recommended)
 
-Docker Compose is the recommended way to run the complete stack:
+Running Briefr via Docker Compose is **highly recommended** because the platform relies on four distinct components running simultaneously (Backend API, Frontend UI, Playwright Bot, and Whisper Service). Managing these manually locally can be complex.
 
 ```bash
-docker compose up --build
+docker compose up -d --build
 ```
 
 Open the application at [http://localhost:5173](http://localhost:5173). The backend API is available at [http://localhost:8000](http://localhost:8000), and the service health endpoints are:
@@ -185,7 +185,13 @@ To stop the stack:
 docker compose down
 ```
 
-## Run services locally
+### Recent Major Updates
+- **Speaker-Glow Attribution**: The Playwright bot now uses Google Meet's DOM "glow" to detect active speakers, intelligently chunking audio exactly at speaker turn boundaries.
+- **Infinite Bot Sessions**: The meeting bot now stays in the session indefinitely until the host ends the call or removes the bot. 
+- **Persisted Bot Identity**: Bot authentication is securely persisted across Docker containers via a base64 environment variable so the bot retains its exact Google account identity.
+- **Isolated Meeting Contexts**: Meeting reports now rigorously isolate and display only tasks generated from that specific meeting's transcript.
+
+## Run services locally (Not Recommended)
 
 ### Backend
 
