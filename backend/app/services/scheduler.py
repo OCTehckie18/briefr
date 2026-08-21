@@ -90,7 +90,7 @@ async def _poll_and_dispatch():
                         "backendToken": backend_token,
                     },
                 )
-                if resp.status_code == 200:
+                if resp.status_code < 300:
                     log.info(f"[Scheduler] Bot started for {meeting_id}")
                 else:
                     log.error(

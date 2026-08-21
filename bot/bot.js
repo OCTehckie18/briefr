@@ -39,6 +39,11 @@ const WHISPER_URL = process.env.WHISPER_URL || "http://localhost:9000";
 const BOT_NAME = process.env.BOT_NAME || "Briefr Bot";
 const BOT_USE_GOOGLE_AUTH = process.env.BOT_USE_GOOGLE_AUTH === "true";
 const MAX_DURATION_MS = parseInt(process.env.BOT_MAX_DURATION_MINUTES || "120", 10) * 60 * 1000;
+
+// HuggingFace Inference API — fallback when local Whisper is unreachable.
+// Set HF_TOKEN in .env. Leave blank to disable the fallback gracefully.
+const HF_TOKEN = process.env.HF_TOKEN || "";
+const HF_WHISPER_MODEL = process.env.HF_WHISPER_MODEL || "openai/whisper-large-v3";
 const CHUNK_DURATION_MS = 30_000; // 30 seconds per audio chunk
 
 // Minimum audio blob size (bytes) to bother sending to Whisper.
@@ -88,6 +93,7 @@ async function transcribeChunk(audioBuffer, chunkIndex) {
   const tmpPath = path.join(os.tmpdir(), `briefr_chunk_${MEETING_ID}_${chunkIndex}.webm`);
   fs.writeFileSync(tmpPath, audioBuffer);
 
+  // ── Attempt 1: Local faster-whisper Docker service ─────────────────────────
   try {
     const form = new FormData();
     form.append("file", fs.createReadStream(tmpPath), {
@@ -95,28 +101,66 @@ async function transcribeChunk(audioBuffer, chunkIndex) {
       contentType: "audio/webm",
     });
 
-    log(`Sending chunk ${chunkIndex} to Whisper (${audioBuffer.length} bytes)...`);
+    log(`Sending chunk ${chunkIndex} to local Whisper (${audioBuffer.length} bytes)...`);
     const res = await fetch(`${WHISPER_URL}/transcribe`, {
       method: "POST",
       body: form,
       headers: form.getHeaders(),
     });
 
-    if (!res.ok) {
-      const errBody = await res.text();
-      log(`Whisper error on chunk ${chunkIndex}: HTTP ${res.status} — ${errBody}`);
+    if (res.ok) {
+      const data = await res.json();
+      const preview = (data.text || "").slice(0, 100);
+      log(`Chunk ${chunkIndex} [local]: "${preview}${preview.length === 100 ? "…" : ""}"`);
+      try { fs.unlinkSync(tmpPath); } catch {}
+      return {
+        text: data.text || "",
+        segments: Array.isArray(data.segments) ? data.segments : [],
+      };
+    }
+
+    const errBody = await res.text();
+    log(`Local Whisper error on chunk ${chunkIndex}: HTTP ${res.status} — ${errBody}. Trying HuggingFace fallback...`);
+  } catch (localErr) {
+    log(`Local Whisper unreachable for chunk ${chunkIndex}: ${localErr.message}. Trying HuggingFace fallback...`);
+  }
+
+  // ── Attempt 2: HuggingFace Inference API fallback ──────────────────────────
+  // NOTE: HF Inference API does not return timestamped segments — segments will
+  // be empty when the fallback is used. Full transcript text is preserved.
+  if (!HF_TOKEN) {
+    log(`Chunk ${chunkIndex}: No HF_TOKEN configured — cannot fall back. Skipping chunk.`);
+    try { fs.unlinkSync(tmpPath); } catch {}
+    return { text: "", segments: [] };
+  }
+
+  try {
+    log(`Sending chunk ${chunkIndex} to HuggingFace (${HF_WHISPER_MODEL})...`);
+    const hfRes = await fetch(
+      `https://api-inference.huggingface.co/models/${HF_WHISPER_MODEL}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${HF_TOKEN}`,
+          "Content-Type": "audio/webm",
+        },
+        body: audioBuffer,
+      }
+    );
+
+    if (!hfRes.ok) {
+      const hfErr = await hfRes.text();
+      log(`HuggingFace error on chunk ${chunkIndex}: HTTP ${hfRes.status} — ${hfErr}`);
       return { text: "", segments: [] };
     }
 
-    const data = await res.json();
-    const preview = (data.text || "").slice(0, 100);
-    log(`Chunk ${chunkIndex}: "${preview}${preview.length === 100 ? "…" : ""}"`);
-    return {
-      text: data.text || "",
-      segments: Array.isArray(data.segments) ? data.segments : [],
-    };
-  } catch (e) {
-    log(`Whisper request failed for chunk ${chunkIndex}: ${e.message}`);
+    const hfData = await hfRes.json();
+    const text = hfData.text || "";
+    const preview = text.slice(0, 100);
+    log(`Chunk ${chunkIndex} [HuggingFace]: "${preview}${preview.length === 100 ? "…" : ""}"`);
+    return { text, segments: [] };
+  } catch (hfErr) {
+    log(`HuggingFace request failed for chunk ${chunkIndex}: ${hfErr.message}`);
     return { text: "", segments: [] };
   } finally {
     try { fs.unlinkSync(tmpPath); } catch {}
@@ -163,6 +207,21 @@ async function run() {
   if (!MEETING_URL || !MEETING_ID) {
     console.error("[Bot] MEETING_URL and MEETING_ID must be set.");
     process.exit(1);
+  }
+
+  // Guard: if Google Auth mode is enabled, auth.json must exist.
+  // Without it the bot will be hard-blocked by Google Meet with no clear error.
+  if (BOT_USE_GOOGLE_AUTH) {
+    const authPath = path.join(__dirname, "auth.json");
+    if (!fs.existsSync(authPath)) {
+      console.error(
+        "[Bot] BOT_USE_GOOGLE_AUTH=true but auth.json is missing.\n" +
+        "      Run `node auth-setup.js` in the bot/ directory to create it, " +
+        "then restart the bot."
+      );
+      await updateBotStatus("failed");
+      process.exit(1);
+    }
   }
 
   log(`Starting. Target: ${MEETING_URL}`);
@@ -253,8 +312,12 @@ async function run() {
       return pc;
     }
 
-    // Copy static methods + prototype so Meet's code still works
-    PatchedRTC.prototype = _RTCPeerConnection.prototype;
+    // Copy static methods + prototype so Meet's code still works.
+    // Use Object.create so PatchedRTC instances still satisfy instanceof checks
+    // without sharing the exact same prototype object as the original.
+    PatchedRTC.prototype = Object.create(_RTCPeerConnection.prototype, {
+      constructor: { value: PatchedRTC, writable: true, configurable: true },
+    });
     Object.setPrototypeOf(PatchedRTC, _RTCPeerConnection);
     Object.defineProperty(window, "RTCPeerConnection", {
       value: PatchedRTC,
@@ -480,11 +543,25 @@ async function run() {
       recorder.start();
       window.__briefrRecorder__ = recorder;
 
-      // Flush every CHUNK_DURATION_MS
+      // ── FIX: guard against recorder race condition ─────────────────────────
+      // onstop is async (blob encode + Node callback). If we call recorder.start()
+      // before onstop resolves, the new recorder captures audio before the
+      // previous chunk has been handed off, corrupting both chunks.
+      // __briefrIsFlushing__ is set true during onstop and cleared once done.
+      window.__briefrIsFlushing__ = false;
+
+      // Flush every CHUNK_DURATION_MS — but only when the previous flush is done
       window.__briefrChunkTimer__ = setInterval(() => {
-        if (recorder.state === "recording") {
+        if (recorder.state === "recording" && !window.__briefrIsFlushing__) {
+          window.__briefrIsFlushing__ = true;
+          // Swap onstop to a one-shot that restarts the recorder after flushing
+          const originalOnstop = recorder.onstop;
+          recorder.onstop = async (e) => {
+            if (originalOnstop) await originalOnstop.call(recorder, e);
+            recorder.start();
+            window.__briefrIsFlushing__ = false;
+          };
           recorder.stop();
-          recorder.start();
         }
       }, chunkDurationMs);
 

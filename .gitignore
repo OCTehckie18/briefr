@@ -2,6 +2,9 @@
 !README.md
 !SKILL.md
 DESIGN.md
+.claude
+.gemini
+.implementation.md
 
 *.pyc
 
