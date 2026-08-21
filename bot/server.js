@@ -16,8 +16,35 @@ import express from "express";
 import { fork } from "child_process";
 import { fileURLToPath } from "url";
 import path from "path";
+import fs from "fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// ── Materialize auth.json from env var ──────────────────────────────────────
+// If BOT_GOOGLE_AUTH_DATA is set (base64-encoded Playwright storageState),
+// write it to auth.json so bot.js can load it. This avoids the need to bake
+// the file into the Docker image or use volume mounts.
+const AUTH_FILE = path.join(__dirname, "auth.json");
+if (process.env.BOT_GOOGLE_AUTH_DATA) {
+  try {
+    const decoded = Buffer.from(process.env.BOT_GOOGLE_AUTH_DATA, "base64").toString("utf-8");
+    // Validate it's real JSON before writing
+    JSON.parse(decoded);
+    fs.writeFileSync(AUTH_FILE, decoded, "utf-8");
+    console.log("[BotServer] auth.json materialized from BOT_GOOGLE_AUTH_DATA env var.");
+  } catch (err) {
+    console.error("[BotServer] Failed to decode BOT_GOOGLE_AUTH_DATA:", err.message);
+    console.error("[BotServer] Make sure the value is valid base64-encoded JSON.");
+  }
+} else if (!fs.existsSync(AUTH_FILE) && process.env.BOT_USE_GOOGLE_AUTH === "true") {
+  console.warn(
+    "[BotServer] WARNING: BOT_USE_GOOGLE_AUTH=true but neither auth.json nor " +
+    "BOT_GOOGLE_AUTH_DATA env var found. Bots will fail to join meetings that " +
+    "require Google sign-in.\n" +
+    "  Option 1: Run `node auth-setup.js` to create auth.json locally.\n" +
+    "  Option 2: Set BOT_GOOGLE_AUTH_DATA to the base64-encoded contents of auth.json."
+  );
+}
 
 const app = express();
 app.use(express.json());

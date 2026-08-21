@@ -213,11 +213,27 @@ async function run() {
   // Without it the bot will be hard-blocked by Google Meet with no clear error.
   if (BOT_USE_GOOGLE_AUTH) {
     const authPath = path.join(__dirname, "auth.json");
+
+    // If BOT_GOOGLE_AUTH_DATA env var is set, materialize auth.json from it.
+    // server.js normally does this on startup, but handle it here too in case
+    // bot.js is run directly (e.g. during development).
+    if (!fs.existsSync(authPath) && process.env.BOT_GOOGLE_AUTH_DATA) {
+      try {
+        const decoded = Buffer.from(process.env.BOT_GOOGLE_AUTH_DATA, "base64").toString("utf-8");
+        JSON.parse(decoded); // validate
+        fs.writeFileSync(authPath, decoded, "utf-8");
+        log("auth.json materialized from BOT_GOOGLE_AUTH_DATA env var.");
+      } catch (err) {
+        log(`Failed to decode BOT_GOOGLE_AUTH_DATA: ${err.message}`);
+      }
+    }
+
     if (!fs.existsSync(authPath)) {
       console.error(
         "[Bot] BOT_USE_GOOGLE_AUTH=true but auth.json is missing.\n" +
-        "      Run `node auth-setup.js` in the bot/ directory to create it, " +
-        "then restart the bot."
+        "      Set BOT_GOOGLE_AUTH_DATA env var (base64-encoded auth.json),\n" +
+        "      or run `node auth-setup.js` in the bot/ directory to create it,\n" +
+        "      then restart the bot."
       );
       await updateBotStatus("failed");
       process.exit(1);
